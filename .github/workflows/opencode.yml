@@ -1,4 +1,5 @@
 name: opencode
+run-name: "opencode manual #${{ github.event.issue.number || github.event.pull_request.number }}"
 
 on:
   issue_comment:
@@ -12,15 +13,15 @@ permissions:
 jobs:
   authorize:
     runs-on: ubuntu-24.04
-    timeout-minutes: 30
+    timeout-minutes: 5
     permissions:
       contents: read
-      pull-requests: read # REST check of the PR head/base before releasing model secrets
+      pull-requests: read
     outputs:
       allowed: ${{ steps.context.outputs.allowed }}
-      mode: ${{ steps.context.outputs.mode }}
     steps:
-      - name: Authorize the comment before checkout or model secrets
+      - &authorize_comment
+        name: Authorize the comment before checkout or model secrets
         id: context
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         with:
@@ -49,16 +50,28 @@ jobs:
             if (!Number.isSafeInteger(number) || number <= 0) {
               throw new Error('Missing Issue/PR number');
             }
-            if (context.eventName === 'pull_request_review_comment' || event.issue?.pull_request) {
+            const isPr = context.eventName === 'pull_request_review_comment' || Boolean(event.issue?.pull_request);
+            let head = context.sha;
+            if (isPr) {
               const { data: pr } = await github.rest.pulls.get({ ...context.repo, pull_number: number });
               if (pr.state !== 'open' || pr.head.repo?.full_name !== repository ||
                   pr.base.repo?.full_name !== repository || pr.head.repo?.fork) {
                 reject('only an open PR with head and base in the trusted repository is eligible');
                 return;
               }
+              head = pr.head.sha;
             }
+            if (!/^[0-9a-f]{40}$/.test(head)) throw new Error('Missing trusted head SHA');
+            core.setOutput('head_sha', head);
+            core.setOutput('is_pr', String(isPr));
             core.setOutput('mode', publish ? 'publish' : 'read-only');
             core.setOutput('allowed', 'true');
+
+      - name: Owner command eligible for manual queue
+        if: steps.context.outputs.allowed == 'true'
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        with:
+          script: core.info('Authorized owner command may enter the manual queue.');
 
   answer:
     needs: authorize
@@ -66,33 +79,156 @@ jobs:
     concurrency:
       group: opencode-${{ github.repository }}-${{ github.event.issue.number || github.event.pull_request.number }}
       cancel-in-progress: false
+      queue: max # keep queued requests; only admitted attempts spend budget
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     permissions:
+      actions: read # immutable admission evidence; neither this token nor the App may write Actions
       contents: read
+      pull-requests: read
       id-token: write
-      issues: write # tracker operations of the runtime gh; push/PR stay with the adapter App
+      issues: write
     steps:
+      # Recheck even when GitHub re-runs only failed jobs and reuses preflight success.
+      - *authorize_comment
+
+      - name: Check the manual PR budget inside the model queue
+        id: budget
+        if: steps.context.outputs.allowed == 'true'
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        env:
+          IS_PR: ${{ steps.context.outputs.is_pr }}
+          RUN_ATTEMPT: ${{ github.run_attempt }}
+        with:
+          script: |
+            if (process.env.IS_PR !== 'true') {
+              core.setOutput('admitted', 'true');
+              return;
+            }
+            const number = context.payload.issue?.number ?? context.payload.pull_request?.number;
+            const title = `opencode manual #${number}`;
+            const repository = 'skaffman41/ai-for-developers-project-387';
+            const attempt = Number(process.env.RUN_ATTEMPT);
+            const { data: current } = await github.rest.actions.getWorkflowRun({ ...context.repo, run_id: context.runId });
+            if (!Number.isSafeInteger(attempt) || attempt < 1 || current.run_attempt !== attempt ||
+                current.display_title !== title || current.path !== '.github/workflows/opencode.yml' ||
+                current.repository?.full_name !== repository || current.event !== context.eventName ||
+                !Number.isSafeInteger(current.workflow_id)) throw new Error('Ambiguous current Actions run');
+            let consumed = 0;
+            let seenCurrent = false;
+            // Unfiltered workflow pagination avoids GitHub's 1000-result search cap.
+            // Event types and the PR marker are selected locally after a complete scan.
+            let runs = [];
+            let total;
+            for (let page = 1; ; page++) {
+              const { data } = await github.rest.actions.listWorkflowRuns({
+                ...context.repo, workflow_id: current.workflow_id, per_page: 100, page,
+              });
+              if (!Number.isSafeInteger(data.total_count) || data.total_count < 0 ||
+                  (total !== undefined && total !== data.total_count) || !Array.isArray(data.workflow_runs)) {
+                throw new Error('Incomplete or ambiguous Actions history');
+              }
+              total = data.total_count;
+              runs.push(...data.workflow_runs);
+              if (runs.length >= total) break;
+              if (data.workflow_runs.length !== 100) throw new Error('Truncated Actions history');
+            }
+            if (runs.length !== total || new Set(runs.map(run => run.id)).size !== total) {
+              throw new Error('Inconsistent Actions history');
+            }
+            for (const run of runs.filter(run => run.display_title === title && ['issue_comment', 'pull_request_review_comment'].includes(run.event))) {
+              if (run.workflow_id !== current.workflow_id || run.path !== current.path ||
+                  !Number.isSafeInteger(run.id) || !Number.isSafeInteger(run.run_attempt) || run.run_attempt < 1) {
+                throw new Error('Ambiguous manual Actions history');
+              }
+              if (run.id === context.runId) {
+                if (run.run_attempt !== attempt) throw new Error('Stale current run history');
+                seenCurrent = true;
+              }
+              const attempts = run.id === context.runId ? attempt - 1 : run.run_attempt;
+              for (let previous = 1; previous <= attempts; previous++) {
+                let jobs = [];
+                let jobTotal;
+                for (let page = 1; ; page++) {
+                  const { data } = await github.rest.actions.listJobsForWorkflowRunAttempt({
+                    ...context.repo, run_id: run.id, attempt_number: previous, per_page: 100, page,
+                  });
+                  if (!Number.isSafeInteger(data.total_count) || data.total_count < 0 || !Array.isArray(data.jobs) ||
+                      (jobTotal !== undefined && jobTotal !== data.total_count)) throw new Error('Ambiguous admission jobs');
+                  jobTotal = data.total_count;
+                  jobs.push(...data.jobs);
+                  if (jobs.length >= jobTotal) break;
+                  if (data.jobs.length !== 100) throw new Error('Truncated admission jobs');
+                }
+                if (jobs.length !== jobTotal) throw new Error('Incomplete admission jobs');
+                const answers = jobs.filter(job => job.name === 'answer');
+                if (answers.length > 1 || (answers[0] && !Array.isArray(answers[0].steps))) {
+                  throw new Error('Ambiguous admission job');
+                }
+                const markers = (answers[0]?.steps ?? []).filter(step => /^Record admitted manual attempt /.test(step.name));
+                if (markers.length > 1 || markers.some(step => !/^Record admitted manual attempt [0-9a-f]{40}$/.test(step.name))) {
+                  throw new Error('Ambiguous admission marker');
+                }
+                if (markers[0]?.conclusion === 'success') consumed++;
+              }
+            }
+            if (!seenCurrent) throw new Error('Missing current run in Actions history');
+            core.setOutput('consumed', String(consumed));
+            core.setOutput(consumed >= 3 ? 'limit_exhausted' : 'admitted', 'true');
+
+      - name: Reject exhausted manual budget
+        if: steps.budget.outputs.limit_exhausted == 'true'
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        with:
+          script: core.setFailed('limit_exhausted — all 3 manual PR attempts have been admitted; нужен человек.');
+
+      - name: Verify the adapter App cannot mutate Actions history
+        id: app_permissions
+        if: steps.budget.outputs.admitted == 'true'
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        with:
+          script: |
+            // The pinned adapter exchanges OIDC for this App's installation token.
+            // Job-token permissions alone do not constrain that separate token.
+            const { data: app } = await github.rest.apps.getBySlug({ app_slug: 'opencode-agent' });
+            if (app.id !== 1549082 || app.slug !== 'opencode-agent' ||
+                !app.permissions || typeof app.permissions !== 'object' ||
+                ![undefined, 'read'].includes(app.permissions.actions) ||
+                ![undefined, 'read'].includes(app.permissions.administration)) {
+              throw new Error('App permissions cannot guarantee read-only Actions history');
+            }
+
+      # Successful step evidence belongs to Actions history, never comments or labels.
+      - name: Record admitted manual attempt ${{ steps.context.outputs.head_sha }}
+        if: steps.budget.outputs.admitted == 'true'
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        with:
+          script: core.info('Manual attempt admitted; cancellation, timeout and failure spend this attempt.');
+
       - name: Checkout trusted bootstrap from the default branch
+        if: steps.budget.outputs.admitted == 'true'
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ github.event.repository.default_branch }}
           fetch-depth: 1
           persist-credentials: false
 
-      - uses: jdx/mise-action@b44d12e7d0d8ee7461bb893e1b1993500433185b # v5.2.7
+      - if: steps.budget.outputs.admitted == 'true'
+        uses: jdx/mise-action@b44d12e7d0d8ee7461bb893e1b1993500433185b # v5.2.7
         with:
           version: "2026.11.3"
           install_args: "--locked"
 
       - name: Stage verified skills and the authorized runtime mode
+        if: steps.budget.outputs.admitted == 'true'
         env:
-          GITHUB_AGENT_MODE: ${{ needs.authorize.outputs.mode }}
+          GITHUB_AGENT_MODE: ${{ steps.context.outputs.mode }}
           GH_TOKEN: ${{ github.token }} # probe of the tracker authorization before the model runs
         run: mise exec -- node scripts/prepare-github-agent.mjs
 
       - name: Run the official OpenCode GitHub adapter
         id: opencode
+        if: steps.budget.outputs.admitted == 'true'
         uses: anomalyco/opencode/github@f4e363c8295fa90a03dddc451882fffe8fbce357 # v1.19.6; VERSION and guard pin its runtime
         env:
           VERSION: "1.19.6"
@@ -102,8 +238,3 @@ jobs:
           model: opencode/glm-5.3-flash-free
           mentions: /oc,/opencode
           share: "false"
-
-      - name: Explain an incomplete run
-        if: failure()
-        run: |
-          echo 'OpenCode did not complete. See the failed step and adapter error above. Check configuration, App installation, OPENCODE_API_KEY, and the free model/quota. No model fallback is configured.' >> "$GITHUB_STEP_SUMMARY"
