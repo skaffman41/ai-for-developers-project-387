@@ -25,15 +25,26 @@ jobs:
             const workflowPath = '.github/workflows/opencode-pr-review.yml';
             if (context.eventName !== 'workflow_run' || event.action !== 'completed' ||
                 event.repository?.full_name !== repository || trigger?.event !== 'pull_request' ||
-                trigger.name !== 'opencode-pr-review' || trigger.path !== workflowPath ||
+                trigger.path !== workflowPath ||
                 trigger.repository?.full_name !== repository || trigger.head_repository?.full_name !== repository ||
-                !Number.isSafeInteger(trigger.id) || !Number.isSafeInteger(trigger.run_attempt)) return;
-            const { data: workflow } = await github.rest.actions.getWorkflow({ ...context.repo, workflow_id: 'opencode-pr-review.yml' });
-            if (workflow.id !== trigger.workflow_id || workflow.path !== workflowPath || workflow.name !== trigger.name) return;
-            const { data: producer } = await github.rest.actions.getWorkflowRunAttempt({
-              ...context.repo, run_id: trigger.id, attempt_number: trigger.run_attempt,
-            });
-            if (producer.id !== trigger.id || producer.run_attempt !== trigger.run_attempt ||
+                !Number.isSafeInteger(trigger.id) || trigger.id < 1 ||
+                !Number.isSafeInteger(trigger.run_attempt) || trigger.run_attempt < 1) return;
+            let workflow;
+            let producer;
+            try {
+              ({ data: workflow } = await github.rest.actions.getWorkflow({ ...context.repo, workflow_id: 'opencode-pr-review.yml' }));
+              if (!Number.isSafeInteger(workflow?.id) || workflow.id <= 0 ||
+                  workflow.id !== trigger.workflow_id || workflow.path !== workflowPath || workflow.name !== 'opencode-pr-review') return;
+              ({ data: producer } = await github.rest.actions.getWorkflowRunAttempt({
+                ...context.repo, run_id: trigger.id, attempt_number: trigger.run_attempt,
+              }));
+            } catch {
+              const sha = /^opencode-review pr=([1-9][0-9]*) sha=([a-f0-9]{40})$/.exec(trigger.display_title ?? '')?.[2] ?? 'unknown';
+              const run = `https://github.com/${repository}/actions/runs/${trigger.id}/attempts/${trigger.run_attempt}`;
+              core.notice(`OpenCode review: infra; нужен человек.\n\nПоследний известный SHA: ${sha}\nЗапуск: ${run}\nНе удалось подтвердить источник через GitHub API; комментарий не опубликован.`);
+              return;
+            }
+            if (producer?.id !== trigger.id || producer.run_attempt !== trigger.run_attempt ||
                 producer.workflow_id !== workflow.id || producer.path !== workflowPath ||
                 producer.event !== 'pull_request' || producer.status !== 'completed' ||
                 producer.repository?.full_name !== repository || producer.head_repository?.full_name !== repository ||

@@ -197,6 +197,12 @@ async function report(
     source?: string;
     currentSha?: string;
     author?: string;
+    runName?: string;
+    trigger?: Record<string, unknown>;
+    attempt?: Record<string, unknown>;
+    registry?: Record<string, unknown>;
+    identityApiFailure?: "workflow" | "attempt";
+    notices?: string[];
   } = {},
 ) {
   const config = parse(
@@ -206,7 +212,7 @@ async function report(
     id: 100,
     run_attempt: 2,
     workflow_id: 9,
-    name: "opencode-pr-review",
+    name: options.runName ?? "opencode-pr-review",
     path: options.source ?? ".github/workflows/opencode-pr-review.yml",
     event: "pull_request",
     status: "completed",
@@ -214,6 +220,7 @@ async function report(
     display_title: `opencode-review pr=71 sha=${sha}`,
     repository: { full_name: repository },
     head_repository: { full_name: repository },
+    ...options.trigger,
   };
   const comments: { body: string }[] = [];
   await new AsyncFunction(
@@ -233,14 +240,23 @@ async function report(
           }),
         },
         actions: {
-          getWorkflow: async () => ({
-            data: {
-              id: 9,
-              path: ".github/workflows/opencode-pr-review.yml",
-              name: "opencode-pr-review",
-            },
-          }),
-          getWorkflowRunAttempt: async () => ({ data: producer }),
+          getWorkflow: async () => {
+            if (options.identityApiFailure === "workflow")
+              throw new Error("GitHub API unavailable");
+            return {
+              data: {
+                id: 9,
+                path: ".github/workflows/opencode-pr-review.yml",
+                name: "opencode-pr-review",
+                ...options.registry,
+              },
+            };
+          },
+          getWorkflowRunAttempt: async () => {
+            if (options.identityApiFailure === "attempt")
+              throw new Error("GitHub API unavailable");
+            return { data: { ...producer, ...options.attempt } };
+          },
         },
         issues: {
           createComment: async (comment: { body: string }) =>
@@ -273,7 +289,7 @@ async function report(
         workflow_run: producer,
       },
     },
-    { notice: () => {} },
+    { notice: (message: string) => options.notices?.push(message) },
   );
   return { config, comments };
 }
@@ -305,6 +321,62 @@ test("Independent reporter survives cancellation and explains failures of the ex
     { author: "outsider" },
   ])
     assert.equal((await report(options)).comments.length, 0);
+});
+
+test("Review completion accepts legacy and expanded run names for the registered workflow", async () => {
+  for (const runName of [
+    "opencode-pr-review",
+    `opencode-review pr=71 sha=${sha}`,
+  ]) {
+    for (const [conclusion, reason] of [
+      ["timed_out", "timeout"],
+      ["failure", "infra"],
+    ]) {
+      const { comments } = await report({ conclusion, runName });
+      assert.equal(comments.length, 1);
+      assert.ok(comments[0].body.includes(reason));
+    }
+  }
+});
+
+test("Review completion stays silent for mismatched or ambiguous workflow identities", async () => {
+  for (const options of [
+    { trigger: { workflow_id: 8 } },
+    { trigger: { workflow_id: undefined } },
+    { trigger: { repository: { full_name: "outsider/repository" } } },
+    { trigger: { head_repository: { full_name: "outsider/repository" } } },
+    { trigger: { id: 0 } },
+    { trigger: { run_attempt: 0 } },
+    { registry: { id: undefined } },
+    { registry: { id: 0 }, trigger: { workflow_id: 0 } },
+    { registry: { path: ".github/workflows/other.yml" } },
+    { registry: { name: "other" } },
+    { attempt: { workflow_id: 8 } },
+    { attempt: { workflow_id: undefined } },
+    { attempt: { path: ".github/workflows/other.yml" } },
+    { attempt: { id: 101 } },
+    { attempt: { run_attempt: 1 } },
+    { attempt: { display_title: `opencode-review pr=72 sha=${sha}` } },
+    { attempt: { event: "issue_comment" } },
+    { attempt: { repository: { full_name: "outsider/repository" } } },
+    { attempt: { head_repository: { full_name: "outsider/repository" } } },
+    { attempt: { status: "in_progress" } },
+  ]) {
+    assert.equal((await report(options)).comments.length, 0);
+  }
+});
+
+test("Review identity API outages explain infra in Actions without publishing an unverified comment", async () => {
+  for (const identityApiFailure of ["workflow", "attempt"] as const) {
+    const notices: string[] = [];
+    const { comments } = await report({ identityApiFailure, notices });
+    assert.deepEqual(comments, []);
+    assert.equal(notices.length, 1);
+    assert.match(notices[0], /infra/);
+    assert.match(notices[0], /нужен человек/);
+    assert.ok(notices[0].includes(sha));
+    assert.match(notices[0], /actions\/runs\/100\/attempts\/2/);
+  }
 });
 
 test("Actions history suppresses a repeated PR/head and a rerun before the model job", async () => {
