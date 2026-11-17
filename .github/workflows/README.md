@@ -1,5 +1,7 @@
 # Automatic tests
 
+The opencode-triage.yml workflow handles owner-created `issues: opened` with a fixed `prompt`, a 30-minute timeout, and the same authorized answer queue as manual commands. Prepared `type:*` records skip the model before checkout or secrets. See [README](../../README.md#автотриаж-новых-обращений) for filters and read-only behavior.
+
 After completing all the steps in the project, automatic tests will become available to you. Tests are run on each commit - once all tasks in the Hexlet interface are completed, make a commit, and the tests will run automatically.
 
 The hexlet-check.yml file is responsible for running these tests - do not delete this file, edit it, or rename the repository.

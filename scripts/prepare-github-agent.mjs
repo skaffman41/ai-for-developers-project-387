@@ -21,9 +21,35 @@ assert.ok(process.env.RUNNER_TEMP, "RUNNER_TEMP is required");
 assert.ok(process.env.GITHUB_ENV, "GITHUB_ENV is required");
 assert.ok(process.env.GITHUB_EVENT_PATH, "GITHUB_EVENT_PATH is required");
 const event = JSON.parse(await readFile(process.env.GITHUB_EVENT_PATH, "utf8"));
-const publish = /^\/(?:oc|opencode)[ \t]+publish(?:[ \t]+([\s\S]*))?$/i.exec(
-  event.comment.body,
-);
+const automaticTriage = process.env.GITHUB_EVENT_NAME === "issues";
+if (automaticTriage) {
+  assert.equal(event.action, "opened");
+  assert.equal(
+    event.repository?.full_name,
+    "skaffman41/ai-for-developers-project-387",
+  );
+  assert.equal(process.env.GITHUB_ACTOR, "skaffman41");
+  assert.equal(event.sender?.login, "skaffman41");
+  assert.equal(event.issue?.user?.login, "skaffman41");
+  assert.equal(event.issue?.user?.type, "User");
+  assert.ok(
+    Number.isSafeInteger(event.issue?.number) && event.issue.number > 0,
+  );
+  assert.ok(Array.isArray(event.issue.labels));
+  assert.ok(
+    !event.issue.labels.some(
+      /** @param {{name?: unknown} | null} label */
+      (label) =>
+        typeof label?.name === "string" && label.name.startsWith("type:"),
+    ),
+    "Prepared type:* records skip automatic triage",
+  );
+}
+const publish = automaticTriage
+  ? null
+  : /^\/(?:oc|opencode)[ \t]+publish(?:[ \t]+([\s\S]*))?$/i.exec(
+      event.comment.body,
+    );
 const mode = publish ? "publish" : "read-only";
 assert.equal(process.env.GITHUB_AGENT_MODE, mode, "Authorized mode mismatch");
 const task = publish?.[1]?.trim();
