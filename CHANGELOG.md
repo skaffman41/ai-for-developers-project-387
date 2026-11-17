@@ -1,5 +1,25 @@
 # Changelog
 
+## [0.4.0](https://github.com/skaffman41/ai-for-developers-project-387/compare/v0.3.0...v0.4.0) (2026-11-17)
+
+
+### Features
+
+* **agent:** triage new owner issues automatically ([#14](https://github.com/skaffman41/ai-for-developers-project-387/issues/14)) ([1e93c31](https://github.com/skaffman41/ai-for-developers-project-387/commit/1e93c3108971f049b6c0ab00fdac3b6025fbf0e1))
+* **agent:** triage new owner issues automatically ([#14](https://github.com/skaffman41/ai-for-developers-project-387/issues/14)) ([f486a00](https://github.com/skaffman41/ai-for-developers-project-387/commit/f486a00df35f4dea99df939a98f8d5a245c650b7))
+
+
+### Bug Fixes
+
+* **agent:** allow pinned gh tracker operations and new plan snapshots ([#12](https://github.com/skaffman41/ai-for-developers-project-387/issues/12)) ([5f2a808](https://github.com/skaffman41/ai-for-developers-project-387/commit/5f2a8086d6a09126f79169b91d2b290644e67786))
+* **agent:** authorize bounded GitHub planning operations ([#12](https://github.com/skaffman41/ai-for-developers-project-387/issues/12)) ([fe91626](https://github.com/skaffman41/ai-for-developers-project-387/commit/fe9162606a504031d9bc65a08c7019e82011f0d3))
+* **agent:** enable bounded GitHub planning ([#12](https://github.com/skaffman41/ai-for-developers-project-387/issues/12)) ([16eb345](https://github.com/skaffman41/ai-for-developers-project-387/commit/16eb345a39b0dd25b5b8437be44df6cb9b14198b))
+* **agent:** gh ops, snapshots ([#12](https://github.com/skaffman41/ai-for-developers-project-387/issues/12)) ✓ ([fe711d8](https://github.com/skaffman41/ai-for-developers-project-387/commit/fe711d81c5e41c07edd6315d6068dd7e4a6a7158))
+* **agent:** queue only authorized answers ([#12](https://github.com/skaffman41/ai-for-developers-project-387/issues/12)) ([18681f5](https://github.com/skaffman41/ai-for-developers-project-387/commit/18681f59f8e80436d556d032867f3a6a6d1db672))
+* **agent:** queue only authorized answers ([#12](https://github.com/skaffman41/ai-for-developers-project-387/issues/12)) ([c1e94b9](https://github.com/skaffman41/ai-for-developers-project-387/commit/c1e94b9061e0a2fa0378cf6faae389904ad4f132))
+* **agent:** resolve pinned bootstrap version without latest ([#12](https://github.com/skaffman41/ai-for-developers-project-387/issues/12)) ([9a0f656](https://github.com/skaffman41/ai-for-developers-project-387/commit/9a0f6569c01b3768561033c2f72fe5a88bd9cc2c))
+* **agent:** use pinned release for bootstrap cache ([#12](https://github.com/skaffman41/ai-for-developers-project-387/issues/12)) ([8f18c7c](https://github.com/skaffman41/ai-for-developers-project-387/commit/8f18c7cf1c8b4b8410a76d7fa7fdeb2b2104251c))
+
 ## [0.3.0](https://github.com/skaffman41/ai-for-developers-project-387/compare/v0.2.0...v0.3.0) (2026-11-17)
 
 
