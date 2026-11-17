@@ -1,16 +1,315 @@
-name: OpenCode PR review
+name: opencode-pr-review
+run-name: "opencode-review pr=${{ github.event.pull_request.number }} sha=${{ github.event.pull_request.head.sha }}"
 
 on:
   pull_request:
     types: [opened, synchronize, reopened]
 
-permissions: {}
+permissions:
+  contents: read
 
 concurrency:
   group: pr-review-${{ github.event.pull_request.number }}
   cancel-in-progress: true
 
 jobs:
+  authorize:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      pull-requests: read
+      actions: read
+    outputs:
+      allowed: ${{ steps.context.outputs.allowed }}
+      review_allowed: ${{ steps.context.outputs.review_allowed }}
+      head_sha: ${{ steps.context.outputs.head_sha }}
+      base_sha: ${{ steps.context.outputs.base_sha }}
+      number: ${{ steps.context.outputs.number }}
+    steps:
+      - name: Authorize the PR before checkout or model secrets
+        id: context
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        with:
+          script: |
+            const event = context.payload;
+            const repository = 'skaffman41/ai-for-developers-project-387';
+            const reject = reason => core.notice(`OpenCode review skipped: ${reason}`);
+            const trusted = pr => pr?.state === 'open' &&
+              ((pr.user?.login === 'skaffman41' && pr.user.type === 'User') ||
+               (pr.user?.login === 'opencode-agent[bot]' && pr.user.type === 'Bot')) &&
+              pr.head?.repo?.full_name === repository && !pr.head.repo.fork &&
+              pr.base?.repo?.full_name === repository && /^[a-f0-9]{40}$/.test(pr.head.sha) &&
+              /^[a-f0-9]{40}$/.test(pr.base.sha);
+            if (context.eventName !== 'pull_request' ||
+                !['opened', 'synchronize', 'reopened'].includes(event.action) ||
+                event.repository?.full_name !== repository || !trusted(event.pull_request)) {
+              reject('only an open owner/App PR with head and base in the trusted repository is eligible');
+              return;
+            }
+            const number = event.pull_request.number;
+            if (!Number.isSafeInteger(number) || number <= 0) throw new Error('Missing PR number');
+            const { data: pr } = await github.rest.pulls.get({ ...context.repo, pull_number: number });
+            if (!trusted(pr) || pr.head.sha !== event.pull_request.head.sha) {
+              reject('PR trust or head changed since this event');
+              return;
+            }
+            core.setOutput('allowed', 'true');
+            core.setOutput('head_sha', pr.head.sha);
+            core.setOutput('base_sha', pr.base.sha);
+            core.setOutput('number', String(number));
+            const marker = `opencode-review pr=${number} sha=${pr.head.sha}`;
+            const runs = await github.paginate(github.rest.actions.listWorkflowRuns, {
+              ...context.repo, workflow_id: 'opencode-pr-review.yml', per_page: 100,
+            });
+            if (Number(process.env.GITHUB_RUN_ATTEMPT) > 1 ||
+                runs.some(run => run.event === 'pull_request' && run.id < context.runId && run.display_title === marker)) {
+              reject(`this PR/head SHA already has a review run: ${pr.head.sha}`);
+              return;
+            }
+            core.setOutput('review_allowed', 'true');
+
+  review:
+    name: Review PR
+    needs: authorize
+    if: needs.authorize.outputs.review_allowed == 'true' && github.run_attempt == 1
+    concurrency:
+      group: opencode-pr-review-${{ github.repository }}-${{ github.event.pull_request.number }}
+      cancel-in-progress: true
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      pull-requests: read
+      issues: read
+      checks: read
+      statuses: read
+    defaults:
+      run:
+        working-directory: trusted
+    steps:
+      - name: Reject reruns before checkout or model secrets
+        working-directory: ${{ github.workspace }}
+        run: test "$GITHUB_RUN_ATTEMPT" = 1
+
+      - name: Checkout trusted bootstrap from main
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: main
+          path: trusted
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Checkout exact PR head as review data
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.authorize.outputs.head_sha }}
+          path: review-data
+          fetch-depth: 0
+          persist-credentials: false
+
+      - uses: jdx/mise-action@b44d12e7d0d8ee7461bb893e1b1993500433185b # v5.2.7
+        with:
+          version: "2026.11.3"
+          install_args: "--locked"
+          working_directory: trusted
+
+      - name: Prepare isolated read-only review configuration
+        env:
+          GITHUB_AGENT_MODE: pr-review
+          GITHUB_REVIEW_DIRECTORY: ${{ github.workspace }}/review-data
+        run: mise exec -- node scripts/prepare-github-agent.mjs
+
+      - name: Install and verify the pinned ordinary CLI without model secrets
+        run: |
+          mkdir -p "$RUNNER_TEMP/opencode-cli"
+          curl --fail --silent --show-error --location --connect-timeout 10 --max-time 120 \
+            https://github.com/anomalyco/opencode/releases/download/v1.19.6/opencode-linux-x64.tar.gz \
+            -o "$RUNNER_TEMP/opencode-cli/runtime.tar.gz"
+          tar -xzf "$RUNNER_TEMP/opencode-cli/runtime.tar.gz" -C "$RUNNER_TEMP/opencode-cli"
+          test "$("$RUNNER_TEMP/opencode-cli/opencode" --version)" = 1.19.6
+          echo "$RUNNER_TEMP/opencode-cli" >> "$GITHUB_PATH"
+          cd "$GITHUB_WORKSPACE/review-data"
+          "$RUNNER_TEMP/opencode-cli/opencode" debug agent github-pr-review > "$GITHUB_AGENT_ROOT/agent.json"
+          "$RUNNER_TEMP/opencode-cli/opencode" debug skill > "$GITHUB_AGENT_ROOT/discovery.json"
+          node "$GITHUB_AGENT_ROOT/verify.mjs"
+
+      - name: Collect PR, agreement, CI and resolved discussion context without the model
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        env:
+          REVIEW_SHA: ${{ needs.authorize.outputs.head_sha }}
+          REVIEW_BASE: ${{ needs.authorize.outputs.base_sha }}
+          REVIEW_NUMBER: ${{ needs.authorize.outputs.number }}
+        with:
+          script: |
+            const fs = require('node:fs/promises');
+            const path = require('node:path');
+            const number = Number(process.env.REVIEW_NUMBER);
+            const { data: pr } = await github.rest.pulls.get({ ...context.repo, pull_number: number });
+            if (pr.state !== 'open' || pr.head.sha !== process.env.REVIEW_SHA || pr.base.sha !== process.env.REVIEW_BASE) throw new Error('PR head/base changed before review');
+            const comments = await github.paginate(github.rest.issues.listComments, { ...context.repo, issue_number: number, per_page: 100 });
+            const reviews = await github.paginate(github.rest.pulls.listReviews, { ...context.repo, pull_number: number, per_page: 100 });
+            const checks = await github.paginate(github.rest.checks.listForRef, { ...context.repo, ref: pr.head.sha, per_page: 100 });
+            const statuses = await github.paginate(github.rest.repos.listCommitStatusesForRef, { ...context.repo, ref: pr.head.sha, per_page: 100 });
+            const threads = [];
+            let cursor = null;
+            do {
+              const data = await github.graphql(`query($owner: String!, $repo: String!, $number: Int!, $cursor: String) {
+                repository(owner: $owner, name: $repo) { pullRequest(number: $number) {
+                  reviewThreads(first: 100, after: $cursor) { pageInfo { hasNextPage endCursor }
+                    nodes { id isResolved isOutdated path line comments(first: 100) {
+                      pageInfo { hasNextPage endCursor } nodes { author { login } body url }
+                    } }
+                  }
+                } }
+              }`, { ...context.repo, number, cursor });
+              const page = data.repository.pullRequest.reviewThreads;
+              for (const thread of page.nodes) {
+                while (thread.comments.pageInfo.hasNextPage) {
+                  const next = await github.graphql(`query($id: ID!, $cursor: String!) {
+                    node(id: $id) { ... on PullRequestReviewThread { comments(first: 100, after: $cursor) {
+                      pageInfo { hasNextPage endCursor } nodes { author { login } body url }
+                    } } }
+                  }`, { id: thread.id, cursor: thread.comments.pageInfo.endCursor });
+                  thread.comments.nodes.push(...next.node.comments.nodes);
+                  thread.comments.pageInfo = next.node.comments.pageInfo;
+                }
+                threads.push(thread);
+              }
+              cursor = page.pageInfo.hasNextPage ? page.pageInfo.endCursor : null;
+            } while (cursor);
+            // Follow explicit same-repository references and native parents/blockers.
+            // The cap is reported to the reviewer instead of silently omitting context.
+            const queue = [];
+            const seen = new Set([number]);
+            const enqueue = text => {
+              for (const match of (text ?? '').matchAll(/https:\/\/github\.com\/skaffman41\/ai-for-developers-project-387\/issues\/(\d+)|(?<![\w/])#(\d+)/g)) {
+                const value = Number(match[1] ?? match[2]);
+                if (Number.isSafeInteger(value) && value > 0 && !seen.has(value)) { seen.add(value); queue.push(value); }
+              }
+            };
+            enqueue(pr.body);
+            const issues = [];
+            while (queue.length && issues.length < 12) {
+              const issue_number = queue.shift();
+              const { data: issue } = await github.rest.issues.get({ ...context.repo, issue_number });
+              const discussion = await github.paginate(github.rest.issues.listComments, { ...context.repo, issue_number, per_page: 100 });
+              issues.push({ number: issue.number, title: issue.title, body: issue.body, state: issue.state,
+                comments: discussion.map(item => ({ author: item.user?.login, body: item.body, url: item.html_url })) });
+              enqueue(issue.body);
+              try {
+                const { data: parent } = await github.request('GET /repos/{owner}/{repo}/issues/{issue_number}/parent', { ...context.repo, issue_number });
+                enqueue(parent.html_url);
+              } catch (error) { if (error.status !== 404) throw error; }
+              const blockers = await github.paginate('GET /repos/{owner}/{repo}/issues/{issue_number}/dependencies/blocked_by', { ...context.repo, issue_number, per_page: 100 });
+              for (const blocker of blockers) enqueue(blocker.html_url);
+            }
+            await fs.writeFile(path.join(process.env.GITHUB_AGENT_ROOT, 'context.json'), JSON.stringify({
+              pr: { number, title: pr.title, body: pr.body, head: pr.head.sha, base: pr.base.sha },
+              comments: comments.map(item => ({ author: item.user?.login, body: item.body, url: item.html_url })),
+              reviews: reviews.map(item => ({ author: item.user?.login, state: item.state, body: item.body, commit_id: item.commit_id })),
+              checks: checks.map(item => ({ name: item.name, status: item.status, conclusion: item.conclusion, url: item.html_url })),
+              statuses: statuses.map(item => ({ context: item.context, state: item.state, description: item.description, url: item.target_url })),
+              threads, issues, omitted_references: queue,
+            }));
+
+      - name: Build bounded review input without executing PR code
+        env:
+          REVIEW_SHA: ${{ needs.authorize.outputs.head_sha }}
+          REVIEW_BASE: ${{ needs.authorize.outputs.base_sha }}
+          GITHUB_REVIEW_DIRECTORY: ${{ github.workspace }}/review-data
+        run: node scripts/pr-review-input.mjs
+
+      - name: Run read-only review
+        id: model
+        if: github.run_attempt == 1
+        env:
+          OPENCODE_API_KEY: ${{ secrets.OPENCODE_API_KEY }}
+          REVIEW_SHA: ${{ needs.authorize.outputs.head_sha }}
+          GITHUB_REVIEW_DIRECTORY: ${{ github.workspace }}/review-data
+        run: node scripts/run-pr-review.mjs
+
+      - name: Read-only review timed out
+        if: failure() && steps.model.outputs.timed_out == 'true'
+        run: exit 1
+
+      - name: Preserve only the review result for the no-model publisher
+        if: steps.model.outcome == 'success'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: pr-review-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ env.GITHUB_AGENT_ROOT }}/review.json
+          if-no-files-found: error
+          retention-days: 14
+
+  publish:
+    needs: [authorize, review]
+    if: needs.review.result == 'success'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      actions: read
+      pull-requests: write
+    steps:
+      - name: Publish the review without a model or PR checkout
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        env:
+          REVIEW_SHA: ${{ needs.authorize.outputs.head_sha }}
+          REVIEW_NUMBER: ${{ needs.authorize.outputs.number }}
+        with:
+          script: |
+            const assert = require('node:assert/strict');
+            const fs = require('node:fs/promises');
+            const path = require('node:path');
+            const { execFileSync } = require('node:child_process');
+            const number = Number(process.env.REVIEW_NUMBER);
+            const sha = process.env.REVIEW_SHA;
+            assert.ok(Number.isSafeInteger(number) && number > 0 && /^[a-f0-9]{40}$/.test(sha));
+            const name = `pr-review-${context.runId}-${process.env.GITHUB_RUN_ATTEMPT}`;
+            const { data: producer } = await github.rest.actions.getWorkflowRunAttempt({
+              ...context.repo, run_id: context.runId, attempt_number: Number(process.env.GITHUB_RUN_ATTEMPT),
+            });
+            assert.ok(producer.id === context.runId && producer.run_attempt === Number(process.env.GITHUB_RUN_ATTEMPT) &&
+              producer.path === '.github/workflows/opencode-pr-review.yml' && producer.event === 'pull_request' &&
+              producer.display_title === `opencode-review pr=${number} sha=${sha}`, 'Wrong producer run/attempt/SHA');
+            const artifacts = await github.paginate(github.rest.actions.listWorkflowRunArtifacts, { ...context.repo, run_id: context.runId, per_page: 100 });
+            const matches = artifacts.filter(item => item.name === name && !item.expired && item.workflow_run?.id === context.runId);
+            assert.equal(matches.length, 1, 'Expected only the result from this run/attempt');
+            assert.ok(matches[0].size_in_bytes <= 1_000_000, 'Review artifact too large');
+            const { data } = await github.rest.actions.downloadArtifact({ ...context.repo, artifact_id: matches[0].id, archive_format: 'zip' });
+            const archive = path.join(process.env.RUNNER_TEMP, 'review-result.zip');
+            assert.ok(Buffer.byteLength(data) <= 1_000_000, 'Downloaded artifact too large');
+            await fs.writeFile(archive, Buffer.from(data));
+            const entries = execFileSync('unzip', ['-Z1', archive], { encoding: 'utf8', maxBuffer: 4096, timeout: 10_000 });
+            assert.equal(entries.trim(), 'review.json', 'Unexpected artifact entry');
+            // Read one known entry, never extract or execute the archive contents.
+            const raw = execFileSync('unzip', ['-p', archive, 'review.json'], { encoding: 'utf8', maxBuffer: 60_000, timeout: 10_000 });
+            const result = JSON.parse(raw);
+            assert.equal(result.sha, sha, 'Review SHA mismatch');
+            const review = result.review;
+            const text = value => typeof value === 'string' && value.trim().length > 0 && value.length <= 5000;
+            assert.ok(text(review?.summary), 'Missing review summary');
+            assert.ok(Array.isArray(review.findings) && review.findings.length <= 50, 'Invalid review findings');
+            for (const finding of review.findings) {
+              assert.ok(text(finding.file) && !finding.file.startsWith('/') && !finding.file.split('/').includes('..'), 'Finding needs a repository file');
+              assert.ok(Number.isSafeInteger(finding.line) && finding.line > 0, 'Finding needs a line');
+              assert.ok(text(finding.conditions) && text(finding.consequences), 'Finding needs conditions and consequences');
+            }
+            const { data: pr } = await github.rest.pulls.get({ ...context.repo, pull_number: number });
+            if (pr.state !== 'open') { core.notice('PR closed; review publication skipped'); return; }
+            const repository = 'skaffman41/ai-for-developers-project-387';
+            assert.ok(pr.head?.repo?.full_name === repository && !pr.head.repo.fork && pr.base?.repo?.full_name === repository &&
+              ((pr.user?.login === 'skaffman41' && pr.user.type === 'User') ||
+               (pr.user?.login === 'opencode-agent[bot]' && pr.user.type === 'Bot')), 'PR trust changed');
+            const body = pr.head.sha !== sha
+              ? `Результат ревью устарел: head PR изменился.\n\nПроверенная версия: ${sha}\nТекущая версия: ${pr.head.sha}`
+              : `${review.summary}\n\n${review.findings.map(finding =>
+                  `- ${finding.file}:${finding.line}\n  Условия: ${finding.conditions}\n  Последствия: ${finding.consequences}`
+                ).join('\n\n')}\n\nПроверенная версия: ${sha}`;
+            assert.ok(body.length < 60_000, 'Review comment too large');
+            // An issue comment records findings; this job never submits APPROVE.
+            await github.rest.issues.createComment({ ...context.repo, issue_number: number, body });
+
   browser:
     needs: authorize
     if: needs.authorize.outputs.allowed == 'true'
