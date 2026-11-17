@@ -1,0 +1,43 @@
+{
+  "schemaVersion": 1,
+  "repository": "skaffman41/ai-for-developers-project-387",
+  "feature": "github-planning-access",
+  "version": "v1",
+  "approved": true,
+  "approval": {
+    "source": "Current user request, 2026-11-17",
+    "text": "Доделай полностью сам эту задачу, чтобы все задачи из задачи были выполнены и чтобы все требования были выполнены."
+  },
+  "baseCommit": "5f2a8086d6a09126f79169b91d2b290644e67786",
+  "canonicalTask": {
+    "kind": "pull_request",
+    "number": 13,
+    "url": "https://github.com/skaffman41/ai-for-developers-project-387/pull/13",
+    "sourceComment": "https://github.com/skaffman41/ai-for-developers-project-387/pull/13#issuecomment-6953377238",
+    "publishedBodySha256": "4d57b4c44cdb6f738d2e753ffdbd4f258e6b8b5d5ca54d1a5815834852909abc"
+  },
+  "records": [
+    {
+      "file": "request.md",
+      "snapshotSha256": "69df782a4a36203b078c1a4e521ad77a39911cb5da14e0b703f6a4d136226776"
+    },
+    {
+      "file": "plan.md",
+      "snapshotSha256": "59a705eac3d2e9f8a116221eceafa70c105b20626daa682df43e445f86db1dde"
+    }
+  ],
+  "blockedBy": [],
+  "testingDecisions": {
+    "newTests": false,
+    "existingCheck": "mise run check",
+    "review": ["Standards", "Spec"],
+    "oneOffProbes": true,
+    "livePublicationRequired": true
+  },
+  "recovery": {
+    "run": 44120819928,
+    "completedEdits": 13,
+    "files": 5,
+    "temporaryCleanupExcluded": true
+  }
+}
