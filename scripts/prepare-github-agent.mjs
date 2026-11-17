@@ -171,7 +171,8 @@ const permission = {
   external_directory: { "*": "deny", [`${skills}/*`]: "allow" },
 };
 // The adapter owns push/PR. Shell access is limited to local preparation,
-// verification and commits. Reviewers receive the diff as task input, without shell.
+// verification, tracker issues through the pinned gh and commits. Reviewers
+// receive the diff as task input, without shell.
 const inspection = {
   "*": "deny",
   "git status": "allow",
@@ -193,7 +194,6 @@ const publisherPermission = {
   edit: {
     ...permission.read,
     ".github/workflows/hexlet-check.yml": "deny",
-    "docs/plans/*": "deny",
   },
   bash: {
     ...inspection,
@@ -208,6 +208,21 @@ const publisherPermission = {
     "mise run test:browser": "allow",
     "mise run typecheck": "allow",
     "mise run api:generate": "allow",
+    // Tracker operations from docs/agents/issue-tracker.md and the pinned gh
+    // pre-checks from docs/agents/skills.md. Single-line commands only: the
+    // wildcard does not match across newlines, so long bodies go through
+    // --body or --body-file on one shell line. Push, merge and other network
+    // clients stay denied.
+    "mise exec -- gh --version": "allow",
+    "mise exec -- gh auth status *": "allow",
+    "mise exec -- gh repo view *": "allow",
+    "mise exec -- gh issue view *": "allow",
+    "mise exec -- gh issue list *": "allow",
+    "mise exec -- gh issue create *": "allow",
+    "mise exec -- gh issue edit *": "allow",
+    "mise exec -- gh issue comment *": "allow",
+    "mise exec -- gh issue close *": "allow",
+    "mise exec -- gh api *": "allow",
     "git add -- *": "allow",
     "git restore --worktree --staged -- *": "allow",
     "git clean -fd -- *": "allow",
