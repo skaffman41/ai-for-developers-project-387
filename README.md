@@ -4,6 +4,35 @@
 
 Продолжение сервиса бронирования календаря: интеграция работы агентов в GitHub.
 
+## Агент в GitHub
+
+Новый комментарий владельца `skaffman41`, начинающийся с `/oc <вопрос>` или
+`/opencode <вопрос>`, запускает [workflow OpenCode](.github/workflows/opencode.yml).
+Поддерживаются обсуждения Issues и PR (`issue_comment: created`), а также комментарии
+к строкам diff (`pull_request_review_comment: created`). Боты, другие аккаунты и PR
+из fork пропускаются до доступа к ключу модели.
+
+Обычный вызов читает проект и отвечает в том же обсуждении от официального
+OpenCode GitHub App. На свежем раннере проверяются и подключаются 38 закреплённых
+Matt Pocock Skills, включая `to-spec`, `to-tickets` и `implement-spec`.
+Модель — `opencode/glm-5.3-flash-free`, автоматической замены модели нет.
+`share: false` отключает публикацию сессий; в закреплённой версии OpenCode
+публикация сессий уже удалена. Лимит задания — 30 минут; один Issue/PR обслуживается
+одним активным запуском, новый комментарий его не отменяет.
+
+Результат ищите в ответе приложения и во вкладке
+[Actions → opencode](https://github.com/skaffman41/ai-for-developers-project-387/actions/workflows/opencode.yml).
+При ошибке конфигурации, ключа, бесплатной модели или квоты запуск остаётся
+незавершённым; причина видна в упавшем шаге и сводке Actions.
+Сейчас подготовлен режим чтения: `/oc publish` и `/opencode publish` явно отклоняются.
+Отдельный режим публикации и живые прогоны предусмотрены следующими задачами
+[#5](https://github.com/skaffman41/ai-for-developers-project-387/issues/5) и
+[#6](https://github.com/skaffman41/ai-for-developers-project-387/issues/6).
+Установка App, наличие `OPENCODE_API_KEY` в Actions Secrets и реальный ответ модели
+пока требуют живой приёмки; локальные проверки её не заменяют.
+Настройка, ограничения и проверка runtime описаны в
+[инструкции GitHub-агента](docs/agents/github-agent.md).
+
 Учебный проект Хекслета: https://ru.hexlet.io/programs/ai-for-developers
 Как это должно работать: https://files.hexlet.app/a/2ipc5m
 

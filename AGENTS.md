@@ -4,6 +4,7 @@
 
 - Сохраняй `.github/workflows/hexlet-check.yml` без изменений.
 - Для workflow используй глобальные Matt Pocock Skills. Подготовка и проверка — [skills.md](docs/agents/skills.md); OpenSpec не устанавливай.
+- В GitHub Actions перед ответом читай [github-agent.md](docs/agents/github-agent.md): обычный вызов разрешает чтение проекта и ответ в текущем обсуждении. Доступность скилла не расширяет разрешения этого запуска.
 
 ## Команды разработки
 

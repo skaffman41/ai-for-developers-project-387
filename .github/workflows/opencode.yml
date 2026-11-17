@@ -1,0 +1,103 @@
+name: opencode
+
+on:
+  issue_comment:
+    types: [created]
+  pull_request_review_comment:
+    types: [created]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: opencode-${{ github.repository }}-${{ github.event.issue.number || github.event.pull_request.number }}
+  cancel-in-progress: false
+
+jobs:
+  authorize:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      pull-requests: read # REST check of the PR head/base before releasing model secrets
+    outputs:
+      allowed: ${{ steps.context.outputs.allowed }}
+    steps:
+      - name: Authorize the comment before checkout or model secrets
+        id: context
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        with:
+          script: |
+            const event = context.payload;
+            const repository = 'skaffman41/ai-for-developers-project-387';
+            const reject = reason => core.notice(`OpenCode skipped: ${reason}`);
+            if (!['issue_comment', 'pull_request_review_comment'].includes(context.eventName) ||
+                event.action !== 'created' || event.repository?.full_name !== repository ||
+                context.actor !== 'skaffman41' || event.sender?.login !== 'skaffman41' ||
+                event.comment?.user?.login !== 'skaffman41' || event.comment?.user?.type !== 'User') {
+              reject('only a new owner comment in the configured repository is eligible');
+              return;
+            }
+            const command = /^\/(?:oc|opencode)(?:\s+|$)([\s\S]*)$/i.exec(event.comment.body);
+            if (!command) {
+              reject('start the comment with /oc or /opencode');
+              return;
+            }
+            if (/^publish(?:\s|$)/i.test(command[1].trim())) {
+              core.setFailed('Publication is not enabled yet; this workflow currently answers in read-only mode.');
+              return;
+            }
+            const number = event.issue?.number ?? event.pull_request?.number;
+            if (!Number.isSafeInteger(number) || number <= 0) {
+              throw new Error('Missing Issue/PR number');
+            }
+            if (context.eventName === 'pull_request_review_comment' || event.issue?.pull_request) {
+              const { data: pr } = await github.rest.pulls.get({ ...context.repo, pull_number: number });
+              if (pr.state !== 'open' || pr.head.repo?.full_name !== repository ||
+                  pr.base.repo?.full_name !== repository || pr.head.repo?.fork) {
+                reject('only an open PR with head and base in the trusted repository is eligible');
+                return;
+              }
+            }
+            core.setOutput('allowed', 'true');
+
+  answer:
+    needs: authorize
+    if: needs.authorize.outputs.allowed == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - name: Checkout trusted bootstrap from the default branch
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          fetch-depth: 1
+          persist-credentials: false
+
+      - uses: jdx/mise-action@b44d12e7d0d8ee7461bb893e1b1993500433185b # v5.2.7
+        with:
+          version: "2026.11.3"
+          install_args: "--locked"
+
+      - name: Stage verified skills and isolated read-only configuration
+        run: mise exec -- node scripts/prepare-github-agent.mjs
+
+      - name: Run the official OpenCode GitHub adapter
+        id: opencode
+        uses: anomalyco/opencode/github@f4e363c8295fa90a03dddc451882fffe8fbce357 # v1.19.6; VERSION and guard pin its runtime
+        env:
+          VERSION: "1.19.6"
+          OPENCODE_API_KEY: ${{ secrets.OPENCODE_API_KEY }}
+        with:
+          model: opencode/glm-5.3-flash-free
+          agent: github-reader
+          mentions: /oc,/opencode
+          share: "false"
+
+      - name: Explain an incomplete run
+        if: failure()
+        run: |
+          echo 'OpenCode did not complete. See the failed step and adapter error above. Check configuration, App installation, OPENCODE_API_KEY, and the free model/quota. No model fallback is configured.' >> "$GITHUB_STEP_SUMMARY"
