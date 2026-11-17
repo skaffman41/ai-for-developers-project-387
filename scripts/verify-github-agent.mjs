@@ -10,20 +10,42 @@ const discovered = JSON.parse(
   await readFile(join(root, "discovery.json"), "utf8"),
 );
 const lock = JSON.parse(await readFile(join(root, "skills-lock.json"), "utf8"));
-assert.equal(agent.name, "github-reader");
+const mode = process.env.GITHUB_AGENT_MODE;
+assert.ok(mode && ["read-only", "publish"].includes(mode));
+const publish = mode === "publish";
+assert.equal(agent.name, publish ? "github-publisher" : "github-reader");
 assert.equal(agent.mode, "primary");
 assert.deepEqual(agent.model, {
   providerID: "opencode",
   modelID: "glm-5.3-flash-free",
 });
-const permitted = new Set(["read", "glob", "skill"]);
-for (const [tool, enabled] of Object.entries(agent.tools)) {
-  assert.ok(
-    !enabled || permitted.has(tool),
-    `Unexpected enabled tool: ${tool}`,
-  );
+/** @param {{name: string, tools: Record<string, boolean>}} candidate @param {string[]} permitted */
+function verifyTools(candidate, permitted) {
+  for (const [tool, enabled] of Object.entries(candidate.tools)) {
+    assert.ok(
+      !enabled || permitted.includes(tool),
+      `Unexpected enabled tool for ${candidate.name}: ${tool}`,
+    );
+  }
+  for (const tool of permitted) assert.equal(candidate.tools[tool], true, tool);
 }
-for (const tool of permitted) assert.equal(agent.tools[tool], true, tool);
+verifyTools(
+  agent,
+  publish
+    ? ["read", "glob", "skill", "edit", "write", "bash", "task"]
+    : ["read", "glob", "skill"],
+);
+if (publish) {
+  for (const name of ["review-standards", "review-spec"]) {
+    const reviewer = JSON.parse(
+      await readFile(join(root, `${name}.json`), "utf8"),
+    );
+    assert.equal(reviewer.name, name);
+    assert.equal(reviewer.mode, "subagent");
+    assert.deepEqual(reviewer.model, agent.model);
+    verifyTools(reviewer, ["read", "glob", "skill"]);
+  }
+}
 for (const skill of lock.skills) {
   const found = discovered.find((item) => item.name === skill.name);
   assert.ok(found, `Runtime did not discover ${skill.name}`);
@@ -35,5 +57,5 @@ for (const skill of lock.skills) {
   );
 }
 console.log(
-  "Runtime verified: only read/glob/skill enabled; all 38 pinned skills discovered and read",
+  `Runtime verified: ${process.env.GITHUB_AGENT_MODE} tools; all 38 pinned skills discovered and read`,
 );

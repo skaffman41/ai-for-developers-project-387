@@ -22,6 +22,7 @@ jobs:
       pull-requests: read # REST check of the PR head/base before releasing model secrets
     outputs:
       allowed: ${{ steps.context.outputs.allowed }}
+      mode: ${{ steps.context.outputs.mode }}
     steps:
       - name: Authorize the comment before checkout or model secrets
         id: context
@@ -43,8 +44,9 @@ jobs:
               reject('start the comment with /oc or /opencode');
               return;
             }
-            if (/^publish(?:\s|$)/i.test(command[1].trim())) {
-              core.setFailed('Publication is not enabled yet; this workflow currently answers in read-only mode.');
+            const publish = /^\/(?:oc|opencode)[ \t]+publish(?:[ \t]+([\s\S]*))?$/i.exec(event.comment.body);
+            if (publish && !publish[1]?.trim()) {
+              core.setFailed('Publication requires an explicit task: /oc publish <task>.');
               return;
             }
             const number = event.issue?.number ?? event.pull_request?.number;
@@ -59,6 +61,7 @@ jobs:
                 return;
               }
             }
+            core.setOutput('mode', publish ? 'publish' : 'read-only');
             core.setOutput('allowed', 'true');
 
   answer:
@@ -82,7 +85,9 @@ jobs:
           version: "2026.11.3"
           install_args: "--locked"
 
-      - name: Stage verified skills and isolated read-only configuration
+      - name: Stage verified skills and the authorized runtime mode
+        env:
+          GITHUB_AGENT_MODE: ${{ needs.authorize.outputs.mode }}
         run: mise exec -- node scripts/prepare-github-agent.mjs
 
       - name: Run the official OpenCode GitHub adapter
@@ -93,7 +98,6 @@ jobs:
           OPENCODE_API_KEY: ${{ secrets.OPENCODE_API_KEY }}
         with:
           model: opencode/glm-5.3-flash-free
-          agent: github-reader
           mentions: /oc,/opencode
           share: "false"
 
