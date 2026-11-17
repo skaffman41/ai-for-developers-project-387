@@ -1,0 +1,26 @@
+
+# JetBrains IDE
+.idea/
+
+# macOS metadata
+.DS_Store
+
+# Dependencies and generated files
+node_modules/
+dist/
+coverage/
+*.tsbuildinfo
+test-results/
+playwright-report/
+
+# Local environment and mise overrides
+.env
+.env.*
+!.env.example
+mise.local.toml
+mise.local.lock
+
+# Local Codex connection overrides and credentials
+.codex/config.toml
+.codex/auth.json
+.codex/.credentials.json

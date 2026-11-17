@@ -1,0 +1,50 @@
+{
+  "name": "call-calendar",
+  "private": true,
+  "type": "module",
+  "workspaces": [
+    "contract",
+    "frontend",
+    "backend"
+  ],
+  "packageManager": "npm@11.19.1",
+  "engines": {
+    "node": "24.22.2",
+    "npm": "11.19.1"
+  },
+  "scripts": {
+    "build": "npm run build --workspaces",
+    "lint": "eslint . --max-warnings 0",
+    "format:check": "prettier --check . && tsp format --check contract/main.tsp",
+    "format": "prettier --write . && tsp format contract/main.tsp",
+    "test": "vitest run",
+    "test:browser": "playwright test",
+    "browser:install": "playwright install chromium",
+    "release:check": "node scripts/check-release.mjs",
+    "release:dry-run": "vitest run tests/release.test.ts tests/release-workflow.test.ts",
+    "typecheck": "npm run build --workspace @call-calendar/contract && npm run typecheck --workspaces && tsc --project tsconfig.tools.json",
+    "api:generate": "node scripts/api.mjs",
+    "api:check": "node scripts/api.mjs --check"
+  },
+  "devDependencies": {
+    "@eslint/js": "10.0.1",
+    "@hey-api/openapi-ts": "0.99.0",
+    "@playwright/test": "1.65.0",
+    "@types/node": "24.19.2",
+    "@typespec/compiler": "1.17.0",
+    "@typespec/http": "1.17.0",
+    "@typespec/openapi": "1.17.0",
+    "@typespec/openapi3": "1.17.0",
+    "ajv": "8.20.0",
+    "ajv-formats": "3.0.1",
+    "eslint": "10.14.0",
+    "eslint-config-prettier": "10.1.8",
+    "globals": "17.13.0",
+    "prettier": "3.9.10",
+    "release-please": "17.6.0",
+    "typescript": "6.0.3",
+    "typescript-eslint": "8.72.1",
+    "vitest": "5.1.0",
+    "yaml": "2.9.1"
+  }
+}
