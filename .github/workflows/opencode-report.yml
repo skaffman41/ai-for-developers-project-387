@@ -26,29 +26,39 @@ jobs:
           script: |
             const repository = 'skaffman41/ai-for-developers-project-387';
             const event = context.payload.workflow_run;
+            const workflowPath = '.github/workflows/opencode.yml';
             const number = /^opencode manual #([1-9][0-9]*)$/.exec(event?.display_title ?? '');
-            if (context.payload.repository?.full_name !== repository || event?.name !== 'opencode' ||
-                event.path !== '.github/workflows/opencode.yml' ||
-                event.head_repository?.full_name !== repository ||
+            if (context.payload.repository?.full_name !== repository || event?.path !== workflowPath ||
+                event.repository?.full_name !== repository || event.head_repository?.full_name !== repository ||
                 !['issue_comment', 'pull_request_review_comment'].includes(event.event) || !number ||
-                !Number.isSafeInteger(Number(number[1])) || !Number.isSafeInteger(event.id) ||
+                !Number.isSafeInteger(Number(number[1])) || !Number.isSafeInteger(event.id) || event.id < 1 ||
                 !Number.isSafeInteger(event.run_attempt) || event.run_attempt < 1) {
               core.notice('Reporter skipped an unrelated workflow run');
               return;
             }
             if (event.conclusion === 'success') return;
-            let reason;
             let head = /^[0-9a-f]{40}$/.test(event.head_sha) ? event.head_sha : 'unknown';
+            const run = `https://github.com/${repository}/actions/runs/${event.id}/attempts/${event.run_attempt}`;
+            let workflow;
+            let source;
             try {
-              const { data: source } = await github.rest.actions.getWorkflowRunAttempt({
+              ({ data: workflow } = await github.rest.actions.getWorkflow({ ...context.repo, workflow_id: 'opencode.yml' }));
+              if (!Number.isSafeInteger(workflow?.id) || workflow.id <= 0 ||
+                  workflow.id !== event.workflow_id || workflow.path !== workflowPath || workflow.name !== 'opencode') return;
+              ({ data: source } = await github.rest.actions.getWorkflowRunAttempt({
                 ...context.repo, run_id: event.id, attempt_number: event.run_attempt,
-              });
-              if (source.id !== event.id || source.run_attempt !== event.run_attempt ||
-                  source.path !== event.path || source.display_title !== event.display_title ||
-                  source.event !== event.event || source.repository?.full_name !== repository ||
-                  !['success', 'failure', 'cancelled', 'timed_out', 'startup_failure', 'action_required', 'neutral', 'skipped', 'stale'].includes(source.conclusion)) {
-                throw new Error('Ambiguous source attempt');
-              }
+              }));
+            } catch {
+              core.notice(`OpenCode: infra; нужен человек.\n\nПоследний известный SHA: ${head}\nЗапуск: ${run}\nНе удалось подтвердить источник через GitHub API; комментарий не опубликован.`);
+              return;
+            }
+            if (source?.id !== event.id || source.run_attempt !== event.run_attempt ||
+                source.workflow_id !== workflow.id || source.path !== workflowPath || source.display_title !== event.display_title ||
+                source.event !== event.event || source.status !== 'completed' ||
+                source.repository?.full_name !== repository || source.head_repository?.full_name !== repository ||
+                !['success', 'failure', 'cancelled', 'timed_out', 'startup_failure', 'action_required', 'neutral', 'skipped', 'stale'].includes(source.conclusion)) return;
+            let reason;
+            try {
               let jobs = [];
               let total;
               for (let page = 1; ; page++) {
@@ -110,5 +120,5 @@ jobs:
             await github.rest.issues.createComment({
               ...context.repo,
               issue_number,
-              body: `${marker}\nOpenCode: **${reason}** — нужен человек.\n\n${explanations[reason]}\n\nПоследний известный SHA: \`${head}\`.\n[Actions run, attempt ${event.run_attempt}](https://github.com/${repository}/actions/runs/${event.id}/attempts/${event.run_attempt}).\n\nАвтоматический переход на другую модель не выполняется.`,
+              body: `${marker}\nOpenCode: **${reason}** — нужен человек.\n\n${explanations[reason]}\n\nПоследний известный SHA: \`${head}\`.\n[Actions run, attempt ${event.run_attempt}](${run}).\n\nАвтоматический переход на другую модель не выполняется.`,
             });
