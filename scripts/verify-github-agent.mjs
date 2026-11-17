@@ -11,9 +11,16 @@ const discovered = JSON.parse(
 );
 const lock = JSON.parse(await readFile(join(root, "skills-lock.json"), "utf8"));
 const mode = process.env.GITHUB_AGENT_MODE;
-assert.ok(mode && ["read-only", "publish"].includes(mode));
+assert.ok(mode && ["read-only", "publish", "pr-review"].includes(mode));
 const publish = mode === "publish";
-assert.equal(agent.name, publish ? "github-publisher" : "github-reader");
+assert.equal(
+  agent.name,
+  mode === "pr-review"
+    ? "github-pr-review"
+    : publish
+      ? "github-publisher"
+      : "github-reader",
+);
 assert.equal(agent.mode, "primary");
 assert.deepEqual(agent.model, {
   providerID: "opencode",
