@@ -375,11 +375,18 @@ await writeFile(
 );
 await writeFile(join(root, "skills-lock.json"), `${JSON.stringify(lock)}\n`);
 await cp("scripts/verify-github-agent.mjs", join(root, "verify.mjs"));
-// The official composite action has no version input and caches by latest release.
-// Bash sources this guard for its steps; an unexpected cached runtime fails closed.
+// Honor the pinned version for the official action's otherwise unconditional
+// latest-release cache lookup. Other curl calls and the runtime guard stay intact.
 await writeFile(
   join(root, "guard.sh"),
-  `# The official installer probes command -v/which before downloading. A shell
+  `curl() {
+  if [[ "$#" == 2 && "$1" == -sf && "$2" == https://api.github.com/repos/anomalyco/opencode/releases/latest ]]; then
+    printf '%s\\n' '{"tag_name":"v1.19.6"}'
+    return 0
+  fi
+  command curl "$@"
+}
+# The official installer probes command -v/which before downloading. A shell
 # function without an executable would make that probe terminate under set -e.
 # Every later action shell sources this file again after GITHUB_PATH is applied.
 if type -P opencode >/dev/null 2>&1; then
