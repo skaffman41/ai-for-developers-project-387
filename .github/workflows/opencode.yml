@@ -72,6 +72,7 @@ jobs:
     permissions:
       contents: read
       id-token: write
+      issues: write # tracker operations of the runtime gh; push/PR stay with the adapter App
     steps:
       - name: Checkout trusted bootstrap from the default branch
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -88,6 +89,7 @@ jobs:
       - name: Stage verified skills and the authorized runtime mode
         env:
           GITHUB_AGENT_MODE: ${{ needs.authorize.outputs.mode }}
+          GH_TOKEN: ${{ github.token }} # probe of the tracker authorization before the model runs
         run: mise exec -- node scripts/prepare-github-agent.mjs
 
       - name: Run the official OpenCode GitHub adapter
@@ -96,6 +98,7 @@ jobs:
         env:
           VERSION: "1.19.6"
           OPENCODE_API_KEY: ${{ secrets.OPENCODE_API_KEY }}
+          GH_TOKEN: ${{ github.token }} # Issues authorization for the pinned gh inside the agent shell
         with:
           model: opencode/glm-5.3-flash-free
           mentions: /oc,/opencode

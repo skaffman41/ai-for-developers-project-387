@@ -24,3 +24,6 @@ mise.local.lock
 .codex/config.toml
 .codex/auth.json
 .codex/.credentials.json
+
+# Transient JSON inputs for the bounded GitHub tracker helper
+/.github-agent-requests/

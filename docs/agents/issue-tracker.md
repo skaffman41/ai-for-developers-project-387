@@ -27,6 +27,44 @@ mise exec -- gh api --paginate 'repos/skaffman41/ai-for-developers-project-387/i
 
 `gh issue view` показывает тело; для полного чтения комментариев API с пагинацией является проверяемым маршрутом. `gh issue list` — обзор: для полного инвентаря используй API `issues?state=all&per_page=100` с `--paginate` и отделяй pull requests от Issues. `gh api` всегда использует полный путь `repos/skaffman41/ai-for-developers-project-387/...`, без неявных `{owner}`/`{repo}`. Передавай тела через структурированный JSON (`--input`) или `--body-file`, сохраняя переносы строк.
 
+### GitHub Actions
+
+В облачном режиме публикации используй команду помощника, указанную в системном
+prompt. Подготовка уже проверила авторизацию gh; прямые gh-команды модели закрыты.
+Запиши запрос в `.github-agent-requests/<name>.json`, затем передай этот путь
+помощнику. Служебный каталог исключён из Git; после успешного запроса файл удаляется.
+
+```json
+{
+  "operation": "create",
+  "data": {
+    "title": "Название спецификации",
+    "body": "Полный согласованный текст",
+    "labels": ["type:spec", "enhancement", "ready-for-agent"]
+  }
+}
+```
+
+| operation   | Вход                                                              | Результат                               |
+| ----------- | ----------------------------------------------------------------- | --------------------------------------- |
+| repo        | —                                                                 | Репозиторий и права текущего запуска    |
+| list        | data.state: open / closed / all (по умолчанию all)                | Полный инвентарь Issues/PR              |
+| labels      | —                                                                 | Все метки репозитория                   |
+| view        | number                                                            | Полное тело Issue или PR                |
+| comments    | number                                                            | Все комментарии                         |
+| parent      | number                                                            | Native parent либо null                 |
+| children    | number                                                            | Native sub-issues                       |
+| blockers    | number                                                            | Native blocked_by                       |
+| create      | data.title, body, labels, assignees                               | Новый Issue                             |
+| update      | number; data: title, body, labels, assignees, state, state_reason | Изменение разрешённых полей Issue       |
+| comment     | number; data.body                                                 | Новый комментарий с сохранением истории |
+| link_child  | number родителя; data.sub_issue_id (database ID)                  | Native parent/child                     |
+| add_blocker | number зависимой задачи; data.issue_id (database ID)              | Native блокер                           |
+
+Необязательные поля `data` можно опустить. Схема помощника принимает только
+перечисленные поля и операции. Endpoint, метод и репозиторий определяет помощник;
+тела запросов передаются gh через stdin, без чтения произвольных файлов.
+
 | Операция skill         | Действие в GitHub                                                                                                                      |
 | ---------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
 | Publish / fetch / list | Создай отдельный Issue; читай полное тело и комментарии; фильтруй список по типу, triage и состоянию                                   |
