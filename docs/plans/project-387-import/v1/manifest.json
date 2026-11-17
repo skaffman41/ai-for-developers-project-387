@@ -1,0 +1,32 @@
+{
+  "schemaVersion": 1,
+  "repository": "skaffman41/ai-for-developers-project-387",
+  "feature": "project-387-import",
+  "version": "v1",
+  "approved": true,
+  "approval": "2026-11-17: пользователь поручил перенос приложения из 386 в подготовленный репозиторий 387, затем ответом «Разрешаю» разрешил коммит и push подготовленной ветки chore/import-calendar с проверкой GitHub Actions.",
+  "baseCommit": "6cb49930f7ff72d562ee8af04fa56d308a05add9",
+  "sourceRepository": "skaffman41/ai-for-developers-project-386",
+  "sourceCommit": "ed41bc8c068ca9a5954453e740450e0cb87266eb",
+  "records": [
+    {
+      "file": "spec.md",
+      "number": 1,
+      "url": "https://github.com/skaffman41/ai-for-developers-project-387/issues/1",
+      "title": "Перенести приложение «Календарь звонков» из проекта 386",
+      "parent": null,
+      "snapshotSha256": "c037ced7a8101c4f39a98a2aa2657728ab38594dc535f64448a7255e780ff215",
+      "publishedBodySha256": "c037ced7a8101c4f39a98a2aa2657728ab38594dc535f64448a7255e780ff215",
+      "blockedBy": [],
+      "acceptanceCriteria": ["AC1", "AC2", "AC3", "AC4", "AC5", "AC6", "AC7"]
+    }
+  ],
+  "ticketOrder": [1],
+  "testingDecisions": {
+    "newTests": false,
+    "existingChecks": "mise run check; published app-check and hexlet-check for the exact branch SHA",
+    "integrityChecks": "File hashes, protected Hexlet workflow and local documentation links",
+    "review": "Self-review: application logic, API and historical snapshots are unchanged"
+  },
+  "completionBoundary": "Issue remains open until integration into main. Commit and push authorized; PR, merge, deployment, Actions permission changes and Hexlet completion require separate commands."
+}
