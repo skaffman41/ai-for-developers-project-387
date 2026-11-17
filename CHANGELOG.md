@@ -1,5 +1,22 @@
 # Changelog
 
+## [0.3.0](https://github.com/skaffman41/ai-for-developers-project-387/compare/v0.2.0...v0.3.0) (2026-11-17)
+
+
+### Features
+
+* **ci:** add read-only GitHub comment agent ([#4](https://github.com/skaffman41/ai-for-developers-project-387/issues/4)) ([c36bcb0](https://github.com/skaffman41/ai-for-developers-project-387/commit/c36bcb04c104942006d7ce71be6312a5a545d0a3))
+* **ci:** enable explicit GitHub agent publication ([#5](https://github.com/skaffman41/ai-for-developers-project-387/issues/5)) ([5bd2b23](https://github.com/skaffman41/ai-for-developers-project-387/commit/5bd2b233d0bd82a0cea153efeee36574fa7498d5))
+* **ci:** integrate GitHub comment agent ([#3](https://github.com/skaffman41/ai-for-developers-project-387/issues/3)) ([04a9561](https://github.com/skaffman41/ai-for-developers-project-387/commit/04a9561a2f64410bc52c98cbda17110397039606))
+* **ci:** подключить GitHub-агента по команде владельца ([#3](https://github.com/skaffman41/ai-for-developers-project-387/issues/3)) ([04a9561](https://github.com/skaffman41/ai-for-developers-project-387/commit/04a9561a2f64410bc52c98cbda17110397039606))
+
+
+### Bug Fixes
+
+* **ci:** allow fresh OpenCode runtime installation ([#6](https://github.com/skaffman41/ai-for-developers-project-387/issues/6)) ([c4ca70f](https://github.com/skaffman41/ai-for-developers-project-387/commit/c4ca70fbe37e192f7d0175bc285953576b083401))
+* **ci:** allow fresh OpenCode runtime installation ([#6](https://github.com/skaffman41/ai-for-developers-project-387/issues/6)) ([88230d0](https://github.com/skaffman41/ai-for-developers-project-387/commit/88230d08c2295f61f3cbbff316f268bfdaf5dccf))
+* **ci:** integrate fresh runtime installation ([#6](https://github.com/skaffman41/ai-for-developers-project-387/issues/6)) ([c4ca70f](https://github.com/skaffman41/ai-for-developers-project-387/commit/c4ca70fbe37e192f7d0175bc285953576b083401))
+
 ## [0.2.0](https://github.com/skaffman41/ai-for-developers-project-386/compare/v0.1.0...v0.2.0) (2026-11-11)
 
 
