@@ -9,10 +9,6 @@ on:
 permissions:
   contents: read
 
-concurrency:
-  group: opencode-${{ github.repository }}-${{ github.event.issue.number || github.event.pull_request.number }}
-  cancel-in-progress: false
-
 jobs:
   authorize:
     runs-on: ubuntu-24.04
@@ -67,6 +63,9 @@ jobs:
   answer:
     needs: authorize
     if: needs.authorize.outputs.allowed == 'true'
+    concurrency:
+      group: opencode-${{ github.repository }}-${{ github.event.issue.number || github.event.pull_request.number }}
+      cancel-in-progress: false
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     permissions:
