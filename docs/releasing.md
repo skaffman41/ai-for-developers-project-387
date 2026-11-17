@@ -95,7 +95,10 @@ mise exec -- gh api repos/skaffman41/ai-for-developers-project-387/actions/permi
 
 Используется только встроенный `GITHUB_TOKEN`. У release-job явно заданы
 `contents: write`, `issues: write`, `pull-requests: write` для Release PR/меток/выпуска
-и `actions: write` для dispatch проверки. Остальные workflow сохраняют read-доступ.
+и `actions: write` для dispatch проверки. У заданий OpenCode отдельно заданы права
+на Issues/комментарии PR и чтение истории Actions; ручной адаптер также использует
+OIDC для авторизации App. Модель не получает Actions write. Эти границы описаны в
+[инструкции GitHub-агента](agents/github-agent.md#подготовка-и-граница-доверия).
 Локальная авторизация gh не копируется в Actions secrets.
 
 ## Release PR и ручной merge
