@@ -36,7 +36,9 @@ function run(id: number, runAttempt = 1, event = "issue_comment") {
     display_title: "opencode manual #32",
     workflow_id: 17,
     path: ".github/workflows/opencode.yml",
-    repository: { full_name: repository },
+    repository: { full_name: repository, fork: false },
+    head_repository: { full_name: repository, fork: false },
+    actor: { login: "skaffman41", type: "User" },
   };
 }
 
@@ -49,7 +51,7 @@ function admissionJob(admitted = true) {
 }
 
 async function budget(
-  history: ReturnType<typeof run>[],
+  history: { id: number; workflow_id: number; event: string }[],
   jobs: Record<
     string,
     {
@@ -64,6 +66,7 @@ async function budget(
     apiFailure?: boolean;
     truncatedAt?: number;
     inconsistentTotal?: boolean;
+    currentRun?: object;
   } = {},
 ) {
   const outputs: Record<string, string> = {};
@@ -84,7 +87,9 @@ async function budget(
     {
       rest: {
         actions: {
-          getWorkflowRun: async () => ({ data: run(100, attempt) }),
+          getWorkflowRun: async () => ({
+            data: options.currentRun ?? run(100, attempt),
+          }),
           listWorkflowRuns: async ({
             event,
             page,
@@ -152,6 +157,106 @@ test("the third admitted manual PR request passes, across both comment event typ
     ).admitted,
     "true",
   );
+});
+
+test.each(["outside-contributor", "skaffman41"])(
+  "an inline run on a fork by %s cannot spend a trusted PR's manual budget",
+  async (actor) => {
+    const forged = {
+      ...run(80, 1, "pull_request_review_comment"),
+      actor: { login: actor, type: "User" },
+      head_repository: { full_name: "outside-contributor/fork", fork: true },
+    };
+    assert.deepEqual(
+      await budget([forged, run(90), run(91), run(100)], {
+        "80:1": admissionJob(),
+        "90:1": admissionJob(),
+        "91:1": admissionJob(),
+      }),
+      { consumed: "2", admitted: "true" },
+    );
+  },
+);
+
+test("a non-owner run cannot spend budget, while three authentic admissions still exhaust it", async () => {
+  const forged = {
+    ...run(80),
+    actor: { login: "outside-contributor", type: "User" },
+  };
+  assert.deepEqual(
+    await budget([forged, run(90), run(91), run(92), run(100)], {
+      "80:1": admissionJob(),
+      "90:1": admissionJob(),
+      "91:1": admissionJob(),
+      "92:1": admissionJob(),
+    }),
+    { consumed: "3", limit_exhausted: "true" },
+  );
+});
+
+test("a foreign workflow repository cannot forge a successful admission for this PR", async () => {
+  const forged = {
+    ...run(80),
+    repository: { full_name: "outside-contributor/fork", fork: true },
+  };
+  assert.deepEqual(
+    await budget([forged, run(90), run(91), run(100)], {
+      "80:1": admissionJob(),
+      "90:1": admissionJob(),
+      "91:1": admissionJob(),
+    }),
+    { consumed: "2", admitted: "true" },
+  );
+});
+
+test.each(["actor", "repository", "head_repository"])(
+  "a matching run with missing %s provenance fails closed",
+  async (field) => {
+    const incomplete = run(90);
+    Reflect.deleteProperty(incomplete, field);
+    await assert.rejects(
+      budget([incomplete, run(100)], { "90:1": admissionJob() }),
+      /Ambiguous/,
+    );
+  },
+);
+
+test("partial or malformed provenance cannot become a free or forged admission", async () => {
+  const incompleteRuns = [
+    { ...run(90), actor: { login: "skaffman41" } },
+    { ...run(90), actor: { type: "User" } },
+    { ...run(90), repository: { full_name: repository } },
+    { ...run(90), head_repository: { full_name: repository } },
+    { ...run(90), repository: { fork: false } },
+    { ...run(90), head_repository: { fork: false } },
+    { ...run(90), actor: { login: "", type: "User" } },
+    { ...run(90), head_repository: { full_name: "", fork: false } },
+  ];
+  for (const incomplete of incompleteRuns) {
+    await assert.rejects(
+      budget([incomplete, run(100)], { "90:1": admissionJob() }),
+      /Ambiguous/,
+    );
+  }
+});
+
+test("the current run also needs complete owner and same-repository provenance", async () => {
+  const untrustedCurrentRuns = [
+    { ...run(100), actor: { login: "outside-contributor", type: "User" } },
+    { ...run(100), actor: { login: "skaffman41", type: "Bot" } },
+    {
+      ...run(100),
+      head_repository: { full_name: "outside-contributor/fork", fork: true },
+    },
+    { ...run(100), head_repository: { full_name: repository } },
+    { ...run(100), repository: { full_name: repository } },
+  ];
+  for (const currentRun of untrustedCurrentRuns) {
+    await assert.rejects(
+      budget([run(100)], {}, 1, { currentRun }),
+      /Ambiguous/,
+    );
+  }
 });
 
 test("every rerun is admitted again, and the fourth attempt is refused before model access", async () => {

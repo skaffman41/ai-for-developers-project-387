@@ -108,11 +108,25 @@ jobs:
             const number = context.payload.issue?.number ?? context.payload.pull_request?.number;
             const title = `opencode manual #${number}`;
             const repository = 'skaffman41/ai-for-developers-project-387';
+            // PR-controlled YAML can forge title and step markers; authenticate their run origin first.
+            const hasTrustedOrigin = run => {
+              const sources = [run.repository, run.head_repository];
+              if (sources.some(source =>
+                    (typeof source?.full_name === 'string' && source.full_name.length > 0 && source.full_name !== repository) ||
+                    source?.fork === true) ||
+                  (typeof run.actor?.login === 'string' && run.actor.login.length > 0 && run.actor.login !== 'skaffman41') ||
+                  (typeof run.actor?.type === 'string' && run.actor.type.length > 0 && run.actor.type !== 'User')) return false;
+              if (run.actor?.login !== 'skaffman41' || run.actor?.type !== 'User' ||
+                  sources.some(source => source?.full_name !== repository || source?.fork !== false)) {
+                throw new Error('Ambiguous manual Actions origin');
+              }
+              return true;
+            };
             const attempt = Number(process.env.RUN_ATTEMPT);
             const { data: current } = await github.rest.actions.getWorkflowRun({ ...context.repo, run_id: context.runId });
-            if (!Number.isSafeInteger(attempt) || attempt < 1 || current.run_attempt !== attempt ||
+            if (!hasTrustedOrigin(current) || !Number.isSafeInteger(attempt) || attempt < 1 || current.run_attempt !== attempt ||
                 current.display_title !== title || current.path !== '.github/workflows/opencode.yml' ||
-                current.repository?.full_name !== repository || current.event !== context.eventName ||
+                current.event !== context.eventName ||
                 !Number.isSafeInteger(current.workflow_id)) throw new Error('Ambiguous current Actions run');
             let consumed = 0;
             let seenCurrent = false;
@@ -137,6 +151,7 @@ jobs:
               throw new Error('Inconsistent Actions history');
             }
             for (const run of runs.filter(run => run.display_title === title && ['issue_comment', 'pull_request_review_comment'].includes(run.event))) {
+              if (!hasTrustedOrigin(run)) continue;
               if (run.workflow_id !== current.workflow_id || run.path !== current.path ||
                   !Number.isSafeInteger(run.id) || !Number.isSafeInteger(run.run_attempt) || run.run_attempt < 1) {
                 throw new Error('Ambiguous manual Actions history');
