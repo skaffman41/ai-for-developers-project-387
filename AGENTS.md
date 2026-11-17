@@ -4,6 +4,7 @@
 
 - Сохраняй `.github/workflows/hexlet-check.yml` без изменений.
 - Для workflow используй глобальные Matt Pocock Skills. Подготовка и проверка — [skills.md](docs/agents/skills.md); OpenSpec не устанавливай.
+- В GitHub Actions перед работой читай [github-agent.md](docs/agents/github-agent.md): обычный вызов разрешает чтение и ответ; только `/oc publish <задача>` или `/opencode publish <задача>` разрешает правку, push и PR для указанной задачи. Merge требует отдельной команды. Доступность скилла не расширяет разрешения запуска.
 
 ## Команды разработки
 

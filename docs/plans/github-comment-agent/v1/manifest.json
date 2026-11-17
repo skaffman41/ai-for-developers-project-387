@@ -1,0 +1,98 @@
+{
+  "schemaVersion": 1,
+  "repository": "skaffman41/ai-for-developers-project-387",
+  "feature": "github-comment-agent",
+  "version": "v1",
+  "approved": true,
+  "approval": "2026-11-17: пользователь ответил «Подходит» на граф из трёх задач с зависимостями 1 → 2 → 3.",
+  "baseCommit": "ce577b40c8192cccc3b43ffe8d29e8c3709a8cdf",
+  "planningBranch": "docs/github-agent-plan",
+  "sourceSpecBodySha256": "468c7d8da2ba3fa8e864fd7ef1a9bfde363b63c2b0ef6299c7cf3e7aea2b504b",
+  "records": [
+    {
+      "file": "spec.md",
+      "number": 3,
+      "url": "https://github.com/skaffman41/ai-for-developers-project-387/issues/3",
+      "title": "Подключить OpenCode к GitHub Actions по команде владельца — шаг 2 Hexlet",
+      "parent": null,
+      "snapshotSha256": "60a40bd078021fdfcd9434bb2f60a4e781ce80e968d6d46058bf94b431ee3a34",
+      "publishedBodySha256": "468c7d8da2ba3fa8e864fd7ef1a9bfde363b63c2b0ef6299c7cf3e7aea2b504b",
+      "blockedBy": [],
+      "snapshotNormalization": "Prettier 3.9.10 Markdown table alignment: cell spacing and separator width only",
+      "acceptanceCriteria": [
+        "AC-01",
+        "AC-02",
+        "AC-03",
+        "AC-04",
+        "AC-05",
+        "AC-06",
+        "AC-07",
+        "AC-08"
+      ]
+    },
+    {
+      "file": "4-readonly-github-agent.md",
+      "number": 4,
+      "url": "https://github.com/skaffman41/ai-for-developers-project-387/issues/4",
+      "title": "Подготовить безопасный ответ GitHub-агента со скиллами проекта",
+      "parent": 3,
+      "snapshotSha256": "72606e2221ef2ef58dc32b3ff53aeb0efb3570ac1fa0629bae5dbbf37b615c6f",
+      "publishedBodySha256": "72606e2221ef2ef58dc32b3ff53aeb0efb3570ac1fa0629bae5dbbf37b615c6f",
+      "blockedBy": [],
+      "snapshotNormalization": "identity",
+      "acceptanceCriteriaCount": 12
+    },
+    {
+      "file": "5-explicit-agent-publication.md",
+      "number": 5,
+      "url": "https://github.com/skaffman41/ai-for-developers-project-387/issues/5",
+      "title": "Добавить явную публикацию правок через GitHub-агента",
+      "parent": 3,
+      "snapshotSha256": "a49deb3aabc6f8c5ed9d7780c66c2a6022abe687d201def2155f0563a4132452",
+      "publishedBodySha256": "a49deb3aabc6f8c5ed9d7780c66c2a6022abe687d201def2155f0563a4132452",
+      "blockedBy": [4],
+      "snapshotNormalization": "identity",
+      "acceptanceCriteriaCount": 9
+    },
+    {
+      "file": "6-live-step-2-acceptance.md",
+      "number": 6,
+      "url": "https://github.com/skaffman41/ai-for-developers-project-387/issues/6",
+      "title": "Подтвердить все требования шага 2 живыми прогонами в GitHub",
+      "parent": 3,
+      "snapshotSha256": "e84294204fa513cf99dbd2534a0f9963204b1204432ece1f3222ebce56578cc2",
+      "publishedBodySha256": "e84294204fa513cf99dbd2534a0f9963204b1204432ece1f3222ebce56578cc2",
+      "blockedBy": [5],
+      "snapshotNormalization": "identity",
+      "acceptanceCriteriaCount": 14
+    }
+  ],
+  "ticketOrder": [4, 5, 6],
+  "supportingDocuments": [
+    {
+      "file": "docs/adr/0007-github-comment-agent.md",
+      "sha256": "841af12e9711167e362945f3fd8eb3799a91efe79ab9811b4d47a6e63f30139e"
+    }
+  ],
+  "testingDecisions": {
+    "newTests": false,
+    "primarySeam": "GitHub comment → Actions → application response or explicitly permitted publication and PR",
+    "existingChecks": "mise run check, YAML/formatting/link validation, diff checks and necessary independent review",
+    "runtimeChecks": "One-off effective-permission, clean-tree and skill-discovery checks in tickets #4 and #5",
+    "liveAcceptance": "Ticket #6: two agreed live runs and evidence for every AC-01–AC-08",
+    "model": "opencode/glm-5.3-flash-free; actual compatibility and free pricing are required acceptance evidence; no paid fallback"
+  },
+  "trackerVerification": {
+    "nativeParent": 3,
+    "children": [4, 5, 6],
+    "blockedBy": {
+      "4": [],
+      "5": [4],
+      "6": [5]
+    },
+    "verifiedAt": "2026-11-17T11:59:02.993Z",
+    "parentBodyUnchanged": true
+  },
+  "snapshotFormatting": "Snapshots use repository Prettier Markdown formatting; publishedBodySha256 hashes the exact unmodified GitHub body. Only table cell spacing and separator width differ for the specification; all ticket bodies are byte-identical.",
+  "completionBoundary": "Only issue publication and a local planning commit are authorized now. Implementation requires a separate command. Push, PR creation and merge require separate explicit commands; later live acceptance retains those boundaries. All eight chapter requirements must be evidenced before acceptance."
+}
