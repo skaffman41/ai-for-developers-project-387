@@ -290,7 +290,11 @@ await cp("scripts/verify-github-agent.mjs", join(root, "verify.mjs"));
 // Bash sources this guard for its steps; an unexpected cached runtime fails closed.
 await writeFile(
   join(root, "guard.sh"),
-  `opencode() {
+  `# The official installer probes command -v/which before downloading. A shell
+# function without an executable would make that probe terminate under set -e.
+# Every later action shell sources this file again after GITHUB_PATH is applied.
+if type -P opencode >/dev/null 2>&1; then
+opencode() {
   local executable
   executable="$(type -P opencode)"
   if [[ -z "$executable" || "$("$executable" --version)" != "1.19.6" ]]; then
@@ -320,6 +324,7 @@ await writeFile(
   fi
   command "$executable" "$@"
 }
+fi
 `,
 );
 const environment = {
