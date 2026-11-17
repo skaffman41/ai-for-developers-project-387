@@ -33,13 +33,18 @@ Matt Pocock Skills, включая `to-spec`, `to-tickets` и `implement-spec`.
 merge требует отдельной команды. Согласованный план, коммиты задач, полный
 `mise run check` и необходимое независимое ревью сохраняются.
 
+Каждая команда публикации относится только к указанной задаче.
+
 Конкретный пример финальной приёмки после согласования этой небольшой правки:
 
 ```text
 /oc publish Для приёмки #6 добавь в раздел «Агент в GitHub» README.md фразу «Каждая команда публикации относится только к указанной задаче.» Выполни существующие проверки и необходимое ревью, создай Conventional Commit со ссылкой на #6 и оставь PR для отдельного решения о merge.
 ```
 
-Команда выше — пример для будущего запуска, реальный PR ещё не подтверждён.
+Живой обычный запрос дал [ответ приложения](https://github.com/skaffman41/ai-for-developers-project-387/issues/6#issuecomment-6949673219)
+и [успешный Actions run](https://github.com/skaffman41/ai-for-developers-project-387/actions/runs/44094660578).
+Отдельная команда публикации создала [PR #9](https://github.com/skaffman41/ai-for-developers-project-387/pull/9);
+[её успешный запуск](https://github.com/skaffman41/ai-for-developers-project-387/actions/runs/44096648302) содержит проверки и ревью правки README.
 Живую работу App и бесплатной модели, пригодность `OPENCODE_API_KEY` из Actions
 Secrets и оба сценария подтверждает
 [#6](https://github.com/skaffman41/ai-for-developers-project-387/issues/6);
