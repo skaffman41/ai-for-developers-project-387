@@ -1,0 +1,15 @@
+{
+  "repository": "skaffman41/ai-for-developers-project-387",
+  "version": 1,
+  "approved": true,
+  "approval_comment": "https://github.com/skaffman41/ai-for-developers-project-387/issues/14#issuecomment-6955090457",
+  "source_commit": "18681f59f8e80436d556d032867f3a6a6d1db672",
+  "issue": 14,
+  "issue_url": "https://github.com/skaffman41/ai-for-developers-project-387/issues/14",
+  "published_body_sha256": "511fabd123b6b7082ed0d47cd117480d1b75ad8c5865a659d0f1ae27f577f329",
+  "files": {
+    "request.md": "511fabd123b6b7082ed0d47cd117480d1b75ad8c5865a659d0f1ae27f577f329",
+    "plan.md": "a7f8302cf9dba50212d9b7899713fddf748104161e4b9ff5a33109fb4cf24c76"
+  },
+  "blocked_by": []
+}
