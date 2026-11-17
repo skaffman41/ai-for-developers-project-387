@@ -1,0 +1,50 @@
+{
+  "repository": "skaffman41/ai-for-developers-project-387",
+  "version": 2,
+  "approved": true,
+  "approval": "Explicit owner implement-spec instruction in session 2026-11-17; clarification.md",
+  "baseCommit": "21c4585c5af2c1581ea6b8b95201eae2cc1373f1",
+  "previousVersion": "../v1/manifest.json",
+  "issues": {
+    "26": {
+      "url": "https://github.com/skaffman41/ai-for-developers-project-387/issues/26",
+      "blockedBy": [],
+      "publishedBodySha256": "100e79ee4058f6a77afb174b57a99d49c5c452e334ec8235ac1edea6941e99cc"
+    },
+    "27": {
+      "url": "https://github.com/skaffman41/ai-for-developers-project-387/issues/27",
+      "blockedBy": [],
+      "publishedBodySha256": "894df9b303538a05df6f944c666ab25795ca022b34bc4d35e7617bbc71bfe487"
+    },
+    "28": {
+      "url": "https://github.com/skaffman41/ai-for-developers-project-387/issues/28",
+      "blockedBy": [27],
+      "publishedBodySha256": "126619e48c3e8233b226947caaae9da1fbe513fe15bfbbc8e884aaa1cb3e6bb9"
+    },
+    "29": {
+      "url": "https://github.com/skaffman41/ai-for-developers-project-387/issues/29",
+      "blockedBy": [],
+      "publishedBodySha256": "2ab0ae7feec1efb912d0471fec77c99bdb58e5c5ff407a313a7fb9772fdec956"
+    },
+    "30": {
+      "url": "https://github.com/skaffman41/ai-for-developers-project-387/issues/30",
+      "blockedBy": [],
+      "publishedBodySha256": "715720ac1536e8d72b038aeda0d9c0b6a0baf8e5aa1506e017575db68aa99b87"
+    },
+    "31": {
+      "url": "https://github.com/skaffman41/ai-for-developers-project-387/issues/31",
+      "blockedBy": [28, 29, 30],
+      "publishedBodySha256": "5dad9d84ed0543b8c6062782adc3c58aee85fd9d6e7f6b508e93c6d7666caeb6"
+    }
+  },
+  "fileSha256": {
+    "27-review-criteria-and-pr-template.md": "889d8dc328bdc412c3f8d402f6801389cd122e63d96c955cda3703836c6c5e44",
+    "31-review-documentation.md": "c2eeada68f36a7407b889ebebfb80926b7a3e175938937ccabd183016e85eb90",
+    "28-pr-review-workflow.md": "7794fafe029fa5c86bbac7bc57b4c20c1e6eb33ebef74868f83b9dcc3489918d",
+    "spec.md": "fd24eb3113da2eb408be38815fc922b28252ff0b3e348d282563239a242ca627",
+    "30-browser-version-job.md": "31327134dbc05f65d2008421d7ba95b6024dcc627976c338386308686651ed0b",
+    "clarification.md": "c19aaa4af581ce1ddb39ac1778a5f938d2c59229110f2ed4fd98c4a83286e1f6",
+    "29-manual-run-budget-reporter.md": "aabd947d00ed2a5191baa82c01f09b75d1e29dbf0f455d16062f79e1daa322f4"
+  },
+  "frontier": [28, 29, 30]
+}
