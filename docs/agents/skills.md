@@ -32,6 +32,11 @@ mise exec -- gh repo view skaffman41/ai-for-developers-project-387 \
 пользовательском окружении GitHub CLI; секреты в репозиторий не добавляются.
 Эти проверки выполняются локально и не входят в `mise run check` или CI приложения.
 
+В GitHub Actions runtime этого проекта авторизацию для Issues задаёт окружение
+запуска (`GH_TOKEN` с правом `issues: write`), а подготовка разово проверяет её
+командами `gh auth status` и `gh repo view` выше;
+интерактивный `gh auth login` там недоступен.
+
 ### Git HTTPS и credential helper
 
 Успешный запрос `gh` подтверждает доступ к API, но Git использует собственную цепочку
