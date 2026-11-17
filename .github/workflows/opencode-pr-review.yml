@@ -1,0 +1,115 @@
+name: OpenCode PR review
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+permissions: {}
+
+concurrency:
+  group: pr-review-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  browser:
+    needs: authorize
+    if: needs.authorize.outputs.allowed == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - name: Initialize version evidence before checkout
+        id: evidence
+        env:
+          EXPECTED_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          evidence="$RUNNER_TEMP/pr-browser-evidence"
+          mkdir -p "$evidence"
+          printf '%s\n' "$EXPECTED_SHA" > "$evidence/expected-sha.txt"
+          printf '%s\n' 'not_verified' > "$evidence/verification-status.txt"
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        id: checkout
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
+
+      - name: Verify and record the actual checkout SHA
+        id: verify
+        env:
+          EXPECTED_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          evidence="$RUNNER_TEMP/pr-browser-evidence"
+          actual_sha="$(git rev-parse HEAD)"
+          printf '%s\n' "$actual_sha" > "$evidence/actual-sha.txt"
+          printf 'Expected PR head: `%s`\n\nActual checkout: `%s`\n' "$EXPECTED_SHA" "$actual_sha" >> "$GITHUB_STEP_SUMMARY"
+          if [ "$actual_sha" != "$EXPECTED_SHA" ]; then
+            printf '%s\n' 'mismatch' > "$evidence/verification-status.txt"
+            exit 1
+          fi
+          printf '%s\n' 'verified' > "$evidence/verification-status.txt"
+
+      - uses: jdx/mise-action@b44d12e7d0d8ee7461bb893e1b1993500433185b # v5.2.7
+        id: tools
+        with:
+          version: "2026.11.3"
+          install_args: "--locked"
+
+      - run: mise exec -- npm ci
+        id: dependencies
+
+      - run: mise run browser:install -- --with-deps
+        id: chromium
+
+      - run: mise run test:browser -- --config playwright.pr.config.ts
+        id: browser
+
+      - name: Record browser outcome even when setup fails
+        id: report
+        if: ${{ !cancelled() }}
+        env:
+          EXPECTED_SHA: ${{ github.event.pull_request.head.sha }}
+          CHECKOUT_OUTCOME: ${{ steps.checkout.outcome }}
+          TOOLS_OUTCOME: ${{ steps.tools.outcome }}
+          DEPENDENCIES_OUTCOME: ${{ steps.dependencies.outcome }}
+          CHROMIUM_OUTCOME: ${{ steps.chromium.outcome }}
+          BROWSER_OUTCOME: ${{ steps.browser.outcome }}
+        run: |
+          evidence="$RUNNER_TEMP/pr-browser-evidence"
+          mkdir -p "$evidence"
+          actual_sha=unavailable
+          verification=not_verified
+          if [ -f "$evidence/actual-sha.txt" ]; then
+            actual_sha="$(cat "$evidence/actual-sha.txt")"
+          fi
+          if [ -f "$evidence/verification-status.txt" ]; then
+            verification="$(cat "$evidence/verification-status.txt")"
+          fi
+          {
+            printf '# PR browser run\n\n'
+            printf 'Expected PR head: %s\n' "$EXPECTED_SHA"
+            printf 'Actual checkout: %s\n' "$actual_sha"
+            printf 'Verification: %s\n\n' "$verification"
+            printf 'Checkout: %s\nTools: %s\nDependencies: %s\nChromium: %s\nBrowser: %s\n\n' "$CHECKOUT_OUTCOME" "$TOOLS_OUTCOME" "$DEPENDENCIES_OUTCOME" "$CHROMIUM_OUTCOME" "$BROWSER_OUTCOME"
+            printf 'Playwright report: playwright-report/\nTrace and screenshots: test-results/\n\n'
+            printf 'Browser diagnostics are unavailable if setup or build fails before a browser test runs.\n'
+          } > "$evidence/run-report.md"
+          {
+            printf '<!doctype html><html lang="en"><meta charset="utf-8"><title>PR browser run</title><body><pre>\n'
+            cat "$evidence/run-report.md"
+            printf '</pre></body></html>\n'
+          } > "$evidence/run-report.html"
+          cat "$evidence/run-report.md" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload browser version and diagnostics
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: pr-browser-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            ${{ runner.temp }}/pr-browser-evidence/
+            playwright-report/
+            test-results/
+          if-no-files-found: error
+          retention-days: 14
