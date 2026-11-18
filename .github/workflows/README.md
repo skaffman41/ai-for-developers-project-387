@@ -7,6 +7,7 @@ budget, including each Re-run attempt. Successful admission steps in Actions
 history are the budget source. `queue: max` preserves queued commands without
 cancelling the active job. The job token and separately verified App cannot write
 Actions history. Bootstrap comes from the default branch, not the PR.
+The manual answer job has a 60-minute timeout.
 
 The [opencode-pr-review.yml](opencode-pr-review.yml) workflow reviews trusted open
 PRs on `opened`, `synchronize`, and `reopened`, including our OpenCode App's PRs.

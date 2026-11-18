@@ -291,6 +291,7 @@ test("a missing current run fails closed instead of undercounting concurrent his
 });
 
 test("the workflow keeps the number marker and admission within the serialized model job", () => {
+  assert.equal(workflow.jobs.answer["timeout-minutes"], 60);
   assert.equal(
     workflow["run-name"],
     "opencode manual #${{ github.event.issue.number || github.event.pull_request.number }}",
