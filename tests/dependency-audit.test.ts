@@ -74,12 +74,15 @@ async function audit(
     repeat?: boolean;
     recover?: boolean;
     split?: boolean;
+    inputMode?: string;
+    replay?: boolean;
   } = {},
 ) {
   const directory = await mkdtemp(join(tmpdir(), "dependency-audit-test-"));
   try {
     const bin = join(directory, "bin");
-    const output = join(directory, "output");
+    let output = join(directory, "output");
+    let replaying = false;
     const runtime = join(directory, "runtime");
     for (const path of [bin, output, runtime]) await mkdir(path);
     if (options.mode !== "missing_preflight")
@@ -103,14 +106,15 @@ async function audit(
     );
     const cli = `#!${process.execPath}
 import assert from 'node:assert/strict';
-import { readFileSync, writeFileSync, appendFileSync } from 'node:fs';
+import { readFileSync, writeFileSync, appendFileSync, existsSync } from 'node:fs';
 import { basename, join } from 'node:path';
 const root = process.env.AUDIT_FIXTURE_ROOT;
 const name = basename(process.argv[1]);
 const args = process.argv.slice(2);
 const mode = process.env.AUDIT_FIXTURE_MODE;
-if (name === 'git') { console.log('${sha}'); process.exit(0); }
+if (name === 'git') { console.log(process.env.AUDIT_FIXTURE_SHA); process.exit(0); }
 if (name === 'npm') {
+  appendFileSync(join(root, 'npm-calls'), '1');
   assert.deepEqual(args, ['audit', '--json', '--package-lock-only', '--workspaces', '--include-workspace-root', '--include=dev']);
   process.stdout.write(readFileSync(join(root, 'report.json')));
   process.exit(mode === 'npm_failure' ? 7 : mode === 'advisories' ? 1 : 0);
@@ -118,6 +122,7 @@ if (name === 'npm') {
 if (name === 'opencode') {
   if (args[0] === '--version') { console.log(mode === 'wrong_version' ? '2.0.0' : '1.19.6'); process.exit(0); }
   for (const name of ['GH_TOKEN', 'GITHUB_TOKEN', 'ACTIONS_RUNTIME_TOKEN', 'ACTIONS_ID_TOKEN_REQUEST_TOKEN', 'ACTIONS_ID_TOKEN_REQUEST_URL']) assert.equal(process.env[name], undefined);
+  appendFileSync(join(root, 'model-calls'), '1');
   const input = readFileSync(0, 'utf8');
   assert.match(input, /advisory/);
   assert.match(input, /audit-report.json/);
@@ -125,19 +130,51 @@ if (name === 'opencode') {
   if (mode === 'model_failure') process.exit(7);
   if (mode === 'model_timeout') { await new Promise(() => setInterval(() => {}, 1000)); }
   const findings = JSON.parse(readFileSync(join(process.env.DEPENDENCY_AUDIT_DIRECTORY, 'findings.json'), 'utf8'));
-  const answer = mode === 'invalid_model' ? '{broken' : JSON.stringify({ summary: 'Проверено закреплённое дерево. Автоматическое исправление не выполнялось.', applicability: 'Advisory требует проверки достижимости; дефект календаря не подтверждён.', assessments: findings.filter(f => ['high', 'critical'].includes(f.severity)).map(f => ({ key: f.key, applicability: 'Нужна проверка достижимости.', action: 'Оценить безопасное обновление.', knownIssueNumbers: [] })) });
+  const answer = mode === 'invalid_model' ? '{broken' : JSON.stringify({ summary: 'Проверено закреплённое дерево. Автоматическое исправление не выполнялось.' + (mode === 'changed_wording' ? readFileSync(join(root, 'model-calls'), 'utf8') : ''), applicability: 'Advisory требует проверки достижимости; дефект календаря не подтверждён.', assessments: findings.filter(f => ['high', 'critical'].includes(f.severity)).map(f => ({ key: f.key, applicability: 'Нужна проверка достижимости.', action: 'Оценить безопасное обновление.', knownIssueNumbers: mode === 'unrelated_model_issue' ? [999] : [] })) });
   console.log(JSON.stringify({ type: 'text', part: { id: 'final', messageID: 'answer', text: answer } }));
   process.exit(0);
 }
 assert.equal(name, 'gh');
 assert.equal(args[0], 'api');
-assert.match(args.join(' '), /repos\\/skaffman41\\/ai-for-developers-project-387\\/issues/);
+const endpoint = args.find(arg => arg.startsWith('repos/'));
+if (endpoint.includes('/actions/runs/123/attempts/1')) {
+  if (mode === 'source_missing') process.exit(7);
+  console.log(JSON.stringify({id:123,run_attempt:1,path:'.github/workflows/dependency-audit.yml',head_sha:mode === 'source_sha' ? 'c'.repeat(40) : '${sha}',head_branch:mode === 'source_branch' ? 'untrusted' : 'main',event:'workflow_dispatch',status:'completed',repository:{full_name:'${repository}'},head_repository:{full_name:'${repository}',fork:false}})); process.exit(0);
+}
+if (endpoint.includes('/actions/runs/123/artifacts')) {
+  console.log(JSON.stringify([{artifacts:[{id:456,name:'dependency-audit-123-1',expired:mode === 'source_expired',size_in_bytes:5000,workflow_run:{id:123,head_sha:'${sha}'}}]}])); process.exit(0);
+}
+if (endpoint.includes('/actions/artifacts/456/zip')) {process.stdout.write(readFileSync(join(root,'source.zip')));process.exit(0);}
+if (endpoint.includes('/contents/package-lock.json')) {
+  writeFileSync(1,JSON.stringify({encoding:'base64',content:mode === 'source_lock' ? 'Y2hhbmdlZA==' : readFileSync('package-lock.json').toString('base64')}));process.exit(0);
+}
+assert.match(endpoint, /repos\\/skaffman41\\/ai-for-developers-project-387\\/issues/);
 const issues = JSON.parse(readFileSync(join(root, 'issues.json'), 'utf8'));
-if (args.includes('--paginate')) { console.log(JSON.stringify([issues.slice(0, 1), issues.slice(1)])); process.exit(0); }
+if (args.includes('--paginate')) {
+  assert.ok(args.includes('repos/${repository}/issues?state=all&per_page=100'));
+  const reads = existsSync(join(root, 'inventory-reads')) ? readFileSync(join(root, 'inventory-reads'), 'utf8').length : 0;
+  appendFileSync(join(root, 'inventory-reads'), '1');
+  if (mode === 'refresh_known' && reads === 1) {
+    issues.push({number:7,state:'closed',title:'dev-tool-critical',body:'npm:102'});
+    writeFileSync(join(root,'issues.json'),JSON.stringify(issues));
+  }
+  console.log(JSON.stringify([issues.slice(0, 1), issues.slice(1)])); process.exit(0);
+}
 const body = JSON.parse(readFileSync(0, 'utf8'));
 appendFileSync(join(root, 'operations.jsonl'), JSON.stringify({ args, body }) + '\\n');
 if (mode === 'publish_failure') process.exit(7);
+if (mode === 'journal_failure_after_finding' && body.title === 'Журнал аудита зависимостей' && !existsSync(join(root,'failed-once'))) {
+  writeFileSync(join(root,'failed-once'),'yes'); process.exit(7);
+}
 let journal = issues.find(i => i.title === 'Журнал аудита зависимостей' && i.user?.login === 'github-actions[bot]' && i.body?.startsWith('<!-- dependency-audit:journal:v1 -->\\n'));
+if (args.includes('POST') && body.title !== 'Журнал аудита зависимостей') {
+  const finding = { number: 100 + issues.filter(i => i.number >= 100).length, title: body.title, body: body.body, state: 'open', user: {login:'github-actions[bot]',type:'Bot'} };
+  issues.push(finding);
+  writeFileSync(join(root, 'issues.json'), JSON.stringify(issues));
+  if (mode === 'ambiguous_finding') process.exit(7);
+  console.log(JSON.stringify(finding));
+  process.exit(0);
+}
 if (args.includes('POST')) {
   assert.equal(journal, undefined);
   journal = { number: 90, title: 'Журнал аудита зависимостей', user: { login: 'github-actions[bot]', type: 'Bot' }, html_url: 'https://github.com/${repository}/issues/90', state: 'open', body: body.body };
@@ -168,11 +205,15 @@ console.log(JSON.stringify(journal));
             GITHUB_REPOSITORY: repository,
             GITHUB_REF: "refs/heads/main",
             GITHUB_EVENT_NAME: "workflow_dispatch",
-            GITHUB_SHA: sha,
-            GITHUB_RUN_ID: "123",
+            GITHUB_SHA: replaying ? "b".repeat(40) : sha,
+            AUDIT_FIXTURE_SHA: replaying ? "b".repeat(40) : sha,
+            GITHUB_RUN_ID: replaying ? "124" : "123",
             GITHUB_RUN_ATTEMPT: "1",
             GITHUB_SERVER_URL: "https://github.com",
             DEPENDENCY_AUDIT_DIRECTORY: output,
+            DEPENDENCY_AUDIT_INPUT: replaying ? "replay" : options.inputMode,
+            DEPENDENCY_AUDIT_SOURCE_RUN: replaying ? "123" : undefined,
+            DEPENDENCY_AUDIT_SOURCE_ATTEMPT: replaying ? "1" : undefined,
             DEPENDENCY_AUDIT_MODEL_TIMEOUT_MS:
               options.mode === "model_timeout" ? "300" : undefined,
             GITHUB_AGENT_ROOT: runtime,
@@ -193,6 +234,43 @@ console.log(JSON.stringify(journal));
     let result = run(options.split ? "analyze" : undefined);
     if (options.split) result = run("publish");
     const firstStatus = result.status;
+    if (options.replay) {
+      const source = join(directory, "source");
+      await mkdir(source);
+      for (const name of ["audit-report.json", "provenance.json"])
+        await writeFile(join(source, name), await readFile(join(output, name)));
+      if (["source_hash", "source_unvalidated"].includes(options.mode ?? "")) {
+        const provenance = JSON.parse(
+          await readFile(join(source, "provenance.json"), "utf8"),
+        );
+        if (options.mode === "source_hash")
+          provenance.reportSha256 = "f".repeat(64);
+        else provenance.reportValidated = false;
+        await writeFile(
+          join(source, "provenance.json"),
+          JSON.stringify(provenance),
+        );
+      }
+      const zip = spawnSync(
+        "zip",
+        [
+          "-q",
+          join(directory, "source.zip"),
+          "audit-report.json",
+          "provenance.json",
+        ],
+        { cwd: source, encoding: "utf8" },
+      );
+      assert.equal(zip.status, 0, zip.stderr);
+      await writeFile(
+        join(directory, "report.json"),
+        JSON.stringify(cleanReport),
+      );
+      replaying = true;
+      output = join(directory, "replay-output");
+      await mkdir(output);
+      result = run();
+    }
     if (options.repeat) {
       const next = run();
       if (!options.recover) assert.equal(next.status, result.status);
@@ -209,8 +287,30 @@ console.log(JSON.stringify(journal));
       .trim()
       .split("\n")
       .map((line) => JSON.parse(line));
-    const raw = await readFile(join(output, "audit-report.json"), "utf8");
-    return { ...result, saved, operations, raw, firstStatus };
+    const raw = await readFile(join(output, "audit-report.json"), "utf8").catch(
+      () => "",
+    );
+    const npmCalls = await readFile(join(directory, "npm-calls"), "utf8").catch(
+      () => "",
+    );
+    const modelCalls = await readFile(
+      join(directory, "model-calls"),
+      "utf8",
+    ).catch(() => "");
+    return {
+      ...result,
+      stderr:
+        result.stderr +
+        (await readFile(join(output, "diagnostic.txt"), "utf8").catch(
+          () => "",
+        )),
+      saved,
+      operations,
+      raw,
+      firstStatus,
+      npmCalls,
+      modelCalls,
+    };
   } finally {
     await rm(directory, { recursive: true, force: true });
   }
@@ -231,7 +331,7 @@ test("A clean pinned dependency tree produces one substantive permanent journal 
   assert.equal(result.saved.provenance.dataType, "real");
 });
 
-test("Expected audit exit 1 keeps all severities and dev advisories while journaling new high/critical candidates", async () => {
+test("Expected audit exit 1 preserves all severities and creates only the most serious unknown finding", async () => {
   const result = await audit({ report: advisoryReport, mode: "advisories" });
   assert.equal(result.status, 0, result.stderr);
   assert.equal(result.saved.status, "new-candidates");
@@ -243,12 +343,21 @@ test("Expected audit exit 1 keeps all severities and dev advisories while journa
     ["critical", "high", "moderate"],
   );
   assert.equal(result.raw, JSON.stringify(advisoryReport));
-  assert.match(result.operations[0].body.body, /Оценить безопасное обновление/);
+  const finding = result.operations[0].body;
+  assert.match(finding.title, /critical.*dev-tool-critical/);
+  assert.match(finding.body, /npm:102/);
+  assert.match(finding.body, /dependency-audit:finding:/);
+  assert.match(finding.body, /Оценить безопасное обновление/);
+  assert.match(finding.body, new RegExp(sha));
+  assert.match(finding.body, /actions\/runs\/123/);
+  assert.match(finding.body, /reportSha256/);
+  assert.deepEqual(Object.keys(finding).sort(), ["body", "title"]);
   assert.match(
     result.operations[0].body.body,
     /не подтверждает дефект календаря/,
   );
-  assert.equal(result.operations.length, 1);
+  assert.equal(result.operations.length, 2);
+  assert.match(result.operations[1].body.body, /issues\/100/);
 });
 
 test("Low/moderate reports are distinct from clean and known open/closed high advisories link to Issues across pages while PRs do not count", async () => {
@@ -506,7 +615,14 @@ test("The service journal never becomes a known finding task on the next audit",
     repeat: true,
   });
   assert.equal(result.saved.status, "new-candidates");
-  assert.equal(result.operations.length, 1);
+  const created = result.operations.filter(
+    (operation) =>
+      operation.body.title?.startsWith("critical:") ||
+      operation.body.title?.startsWith("high:"),
+  );
+  assert.equal(created.length, 2);
+  assert.match(created[0].body.title, /critical/);
+  assert.match(created[1].body.title, /high/);
 });
 
 test("Missing/invalid reports, model configuration/errors/timeouts and publication refusals never become a clean audit", async () => {
@@ -515,6 +631,7 @@ test("Missing/invalid reports, model configuration/errors/timeouts and publicati
     ["npm_failure", cleanReport, undefined, "report-error"],
     ["success", cleanReport, "", "model-error"],
     ["invalid_model", cleanReport, undefined, "model-error"],
+    ["unrelated_model_issue", advisoryReport, undefined, "model-error"],
     ["model_failure", cleanReport, undefined, "model-error"],
     ["model_timeout", cleanReport, undefined, "model-timeout"],
     ["wrong_version", cleanReport, undefined, "model-error"],
@@ -528,4 +645,154 @@ test("Missing/invalid reports, model configuration/errors/timeouts and publicati
     if (expected !== "publication-error")
       assert.match(result.operations[0].body.body, /не завершён/);
   }
+});
+
+function onlyHigh() {
+  return {
+    ...advisoryReport,
+    vulnerabilities: {
+      "dev-tool-high": advisoryReport.vulnerabilities["dev-tool-high"],
+    },
+    metadata: {
+      vulnerabilities: {
+        info: 0,
+        low: 0,
+        moderate: 0,
+        high: 1,
+        critical: 0,
+        total: 1,
+      },
+    },
+  };
+}
+
+test("A fresh complete inventory suppresses a newly known critical and selects the next unknown high", async () => {
+  const result = await audit({ report: advisoryReport, mode: "refresh_known" });
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.operations[0].body.title, /^high: dev-tool-high/);
+  assert.match(result.operations[1].body.body, /issues\/7/);
+});
+
+test("Changed model wording, a failed journal and an ambiguous finding POST never duplicate the stable task", async () => {
+  for (const mode of [
+    "changed_wording",
+    "journal_failure_after_finding",
+    "ambiguous_finding",
+  ]) {
+    const result = await audit({
+      report: onlyHigh(),
+      mode,
+      repeat: true,
+      recover: true,
+    });
+    assert.equal(result.status, 0, result.stderr);
+    assert.equal(result.saved.status, "known-high-critical");
+    const created = result.operations.filter((operation) =>
+      operation.body.title?.startsWith("high:"),
+    );
+    assert.equal(created.length, 1, mode);
+    if (mode === "journal_failure_after_finding")
+      assert.equal(result.firstStatus, 1);
+    assert.ok(
+      result.operations.every(
+        (operation) =>
+          !operation.args.some((arg: string) => /comments/.test(arg)),
+      ),
+    );
+    assert.ok(
+      result.operations.every(
+        (operation) => !Object.hasOwn(operation.body, "state"),
+      ),
+    );
+  }
+});
+
+test("Educational runtime data is explicit throughout and its historical text cannot suppress a real finding", async () => {
+  const educational = await audit({
+    inputMode: "educational",
+    issues: [
+      {
+        number: 4,
+        title: "dependency-audit-educational-example",
+        body: "npm:999999999",
+        state: "closed",
+      },
+    ],
+  });
+  assert.equal(educational.status, 0, educational.stderr);
+  assert.equal(educational.saved.provenance.dataType, "educational");
+  assert.match(educational.raw, /educational/);
+  assert.match(educational.operations[0].body.title, /УЧЕБНЫЙ/);
+  assert.match(educational.operations[0].body.body, /учебн/i);
+  assert.match(educational.operations[1].body.body, /учебн/i);
+  const report = JSON.parse(educational.raw);
+  delete report.dependencyAudit;
+  const real = await audit({
+    report,
+    issues: [{ number: 4, ...educational.operations[0].body, state: "closed" }],
+  });
+  assert.equal(real.status, 0, real.stderr);
+  assert.equal(real.saved.provenance.dataType, "real");
+  assert.equal(real.saved.createdIssue.number, 100);
+  assert.doesNotMatch(real.operations[0].body.title, /УЧЕБНЫЙ/);
+});
+
+test("Replay reads the exact verified artifact bytes, preserves original provenance and runs analysis again without npm", async () => {
+  const raw = JSON.stringify(onlyHigh(), null, 2) + "\n  ";
+  const result = await audit({ report: raw, replay: true });
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(result.raw, raw);
+  assert.equal(result.npmCalls.length, 1);
+  assert.equal(result.modelCalls.length, 2);
+  assert.equal(result.saved.provenance.sha, sha);
+  assert.equal(result.saved.provenance.runId, "123");
+  assert.equal(result.saved.provenance.replay.runId, "124");
+  assert.equal(result.saved.provenance.replay.checkoutSha, "b".repeat(40));
+  assert.equal(result.saved.status, "known-high-critical");
+  assert.equal(
+    result.operations.filter((operation) =>
+      operation.body.title?.startsWith("high:"),
+    ).length,
+    1,
+  );
+});
+
+test("Missing, expired, mismatched or untrusted saved sources fail explicitly without fresh npm or another inference", async () => {
+  for (const mode of [
+    "source_unvalidated",
+    "source_missing",
+    "source_expired",
+    "source_hash",
+    "source_branch",
+    "source_sha",
+    "source_lock",
+  ]) {
+    const result = await audit({ report: onlyHigh(), mode, replay: true });
+    assert.equal(result.status, 1, mode);
+    assert.equal(result.saved.status, "report-error", mode);
+    assert.equal(result.npmCalls.length, 1, mode);
+    assert.equal(result.modelCalls.length, 1, mode);
+    assert.equal(
+      result.operations.filter((operation) =>
+        operation.body.title?.startsWith("high:"),
+      ).length,
+      1,
+      mode,
+    );
+  }
+});
+
+test("Replaying educational bytes preserves their identity and avoids a second educational task", async () => {
+  const result = await audit({ inputMode: "educational", replay: true });
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(result.saved.provenance.dataType, "educational");
+  assert.equal(result.saved.provenance.replay.sourceRunId, "123");
+  assert.equal(result.npmCalls.length, 0);
+  assert.equal(result.modelCalls.length, 2);
+  assert.equal(
+    result.operations.filter((operation) =>
+      operation.body.title?.startsWith("[УЧЕБНЫЙ АУДИТ]"),
+    ).length,
+    1,
+  );
 });

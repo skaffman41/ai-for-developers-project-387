@@ -18,16 +18,32 @@ test("Both main-only audit entries share one daily Moscow schedule, 20-minute bu
     "dependency-audit-${{ github.repository }}",
   );
   assert.equal(workflow.concurrency["cancel-in-progress"], false);
+  assert.deepEqual(workflow.on.workflow_dispatch.inputs.input.options, [
+    "real",
+    "educational",
+    "replay",
+  ]);
+  assert.equal(workflow.on.workflow_dispatch.inputs.input.default, "real");
+  assert.equal(workflow.on.workflow_dispatch.inputs.source_run.type, "string");
+  assert.equal(
+    workflow.on.workflow_dispatch.inputs.source_attempt.type,
+    "string",
+  );
   const job = workflow.jobs.audit;
   assert.equal(job["timeout-minutes"], 20);
   assert.match(job.if, /github.ref == 'refs\/heads\/main'/);
   assert.match(job.if, /skaffman41\/ai-for-developers-project-387/);
-  assert.deepEqual(job.permissions, { contents: "read", issues: "write" });
+  assert.deepEqual(job.permissions, {
+    contents: "read",
+    issues: "write",
+    actions: "read",
+  });
   const steps = job.steps;
   assert.ok(
     steps.some(
       (step: { with?: { ref?: string; "persist-credentials"?: boolean } }) =>
-        step.with?.ref === "main" && step.with["persist-credentials"] === false,
+        step.with?.ref === "${{ github.sha }}" &&
+        step.with["persist-credentials"] === false,
     ),
   );
   assert.match(text, /VERSION: "1.19.6"/);

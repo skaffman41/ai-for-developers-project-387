@@ -5,6 +5,18 @@ on:
     - cron: "17 6 * * *"
       timezone: Europe/Moscow
   workflow_dispatch:
+    inputs:
+      input:
+        description: Report source
+        type: choice
+        options: [real, educational, replay]
+        default: real
+      source_run:
+        description: Original acquisition run ID (replay only)
+        type: string
+      source_attempt:
+        description: Original acquisition run attempt (replay only)
+        type: string
 
 permissions:
   contents: read
@@ -21,16 +33,20 @@ jobs:
     permissions:
       contents: read
       issues: write
+      actions: read
     env:
       DEPENDENCY_AUDIT_DIRECTORY: ${{ runner.temp }}/dependency-audit
       GITHUB_AGENT_MODE: audit
+      DEPENDENCY_AUDIT_INPUT: ${{ inputs.input || 'real' }}
+      DEPENDENCY_AUDIT_SOURCE_RUN: ${{ inputs.source_run }}
+      DEPENDENCY_AUDIT_SOURCE_ATTEMPT: ${{ inputs.source_attempt }}
     steps:
       - name: Checkout main without Git credentials
         id: checkout
         timeout-minutes: 1
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: main
+          ref: ${{ github.sha }}
           persist-credentials: false
 
       - uses: jdx/mise-action@b44d12e7d0d8ee7461bb893e1b1993500433185b # v5.2.7
@@ -70,7 +86,7 @@ jobs:
           OPENCODE_API_KEY: ${{ secrets.OPENCODE_API_KEY }}
         run: mise exec -- node scripts/run-dependency-audit.mjs analyze
 
-      - name: Publish the permanent journal without a model or model secret
+      - name: Publish at most one finding and the journal without a model secret
         if: ${{ !cancelled() && steps.checkout.outcome == 'success' && steps.tools.outcome == 'success' }}
         timeout-minutes: 1
         env:
