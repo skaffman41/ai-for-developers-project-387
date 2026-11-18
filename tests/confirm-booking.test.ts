@@ -86,7 +86,7 @@ test("confirmation saves normalized contacts and full interval and replays after
 });
 
 test("booking topic is normalized, persisted, returned and replayed exactly", async () => {
-  await withBackend(async ({ url }) => {
+  await withBackend(async ({ url, path }) => {
     const eventType = await type(url);
     const key = randomUUID();
     const payload = {
@@ -101,10 +101,40 @@ test("booking topic is normalized, persisted, returned and replayed exactly", as
       topic: "План встречи:\n- обсудить сроки",
     });
     expect(await (await post(url, key, payload)).json()).toEqual(saved);
+    const reused = await post(url, key, {
+      ...payload,
+      topic: "Другая тема",
+    });
+    expect(reused.status).toBe(409);
+    expect(await reused.json()).toMatchObject({
+      idempotencyKey: key,
+      outcome: "unknown",
+      error: { code: "IDEMPOTENCY_KEY_REUSED" },
+    });
     const owner = await (
       await fetch(`${url}/api/owner/bookings?period=all`)
     ).json();
     expect(owner.data).toEqual([saved.data]);
+    const { DatabaseSync } = await import("node:sqlite");
+    const disk = new DatabaseSync(path);
+    try {
+      expect(
+        disk
+          .prepare(
+            "SELECT status FROM operation_results WHERE operation='createBooking' AND attempt_key = ?",
+          )
+          .get(key),
+      ).toMatchObject({ status: 201 });
+      expect(
+        disk
+          .prepare(
+            "SELECT body FROM operation_results WHERE operation='createBooking' AND attempt_key = ?",
+          )
+          .get(key),
+      ).toMatchObject({ body: JSON.stringify(saved) });
+    } finally {
+      disk.close();
+    }
   });
 });
 
@@ -159,7 +189,7 @@ test("topic over 200 characters is a saved validation refusal", async () => {
 });
 
 test("topic does not change the ordinary slot conflict", async () => {
-  await withBackend(async ({ url }) => {
+  await withBackend(async ({ url, path }) => {
     const eventType = await type(url);
     const first = await post(url, randomUUID(), {
       ...raw,
@@ -167,6 +197,7 @@ test("topic does not change the ordinary slot conflict", async () => {
       topic: "Первая тема",
     });
     expect(first.status).toBe(201);
+    const firstBooking = (await first.json()).data;
     const conflictKey = randomUUID();
     const conflictPayload = {
       ...raw,
@@ -184,6 +215,40 @@ test("topic does not change the ordinary slot conflict", async () => {
     expect(
       await (await post(url, conflictKey, conflictPayload)).json(),
     ).toEqual(refused);
+    const reused = await post(url, conflictKey, {
+      ...conflictPayload,
+      topic: "Третья тема",
+    });
+    expect(reused.status).toBe(409);
+    expect(await reused.json()).toMatchObject({
+      idempotencyKey: conflictKey,
+      outcome: "unknown",
+      error: { code: "IDEMPOTENCY_KEY_REUSED" },
+    });
+    const owner = await (
+      await fetch(`${url}/api/owner/bookings?period=all`)
+    ).json();
+    expect(owner.data).toEqual([firstBooking]);
+    const { DatabaseSync } = await import("node:sqlite");
+    const disk = new DatabaseSync(path);
+    try {
+      expect(
+        disk
+          .prepare(
+            "SELECT status FROM operation_results WHERE operation='createBooking' AND attempt_key = ?",
+          )
+          .get(conflictKey),
+      ).toMatchObject({ status: 409 });
+      expect(
+        disk
+          .prepare(
+            "SELECT body FROM operation_results WHERE operation='createBooking' AND attempt_key = ?",
+          )
+          .get(conflictKey),
+      ).toMatchObject({ body: JSON.stringify(refused) });
+    } finally {
+      disk.close();
+    }
   });
 });
 

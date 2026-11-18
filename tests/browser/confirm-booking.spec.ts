@@ -80,6 +80,9 @@ test("guest topic is trimmed, kept with the confirmation and shown to the owner"
   ).toBeVisible();
   await page.reload();
   await expect(
+    page.getByRole("heading", { name: "Встреча забронирована" }),
+  ).toBeVisible();
+  await expect(
     page.getByText("План встречи:\n- обсудить сроки", { exact: true }),
   ).toBeVisible();
   const owner = await context.newPage();
@@ -287,6 +290,8 @@ for (const loss of [
     backend,
   }, info) => {
     await contacts(page);
+    const topic = "  План разговора:\n- обсудить сроки\n- согласовать бюджет  ";
+    await page.getByLabel("Тема разговора").fill(topic);
     const sent: { key: string | undefined; body: unknown }[] = [];
     let first = true;
     await page.route("**/api/bookings", async (route) => {
@@ -351,6 +356,7 @@ for (const loss of [
       }
     }
     await expect(page.getByLabel("Имя", { exact: true })).toBeDisabled();
+    await expect(page.getByLabel("Тема разговора")).toBeDisabled();
     await expect(
       page.getByRole("button", { name: "1. Тип встречи" }),
     ).toBeDisabled();
@@ -360,6 +366,7 @@ for (const loss of [
     await expect(page.getByRole("alert")).toContainText(
       "Бронирование могло быть сохранено. Повторите эту же попытку, чтобы узнать результат.",
     );
+    await expect(page.getByLabel("Тема разговора")).toHaveValue(topic);
     await expect(
       page.getByRole("button", { name: "Повторить подтверждение" }),
     ).toBeVisible();
@@ -367,8 +374,19 @@ for (const loss of [
     await expect(
       page.getByRole("heading", { name: "Встреча забронирована" }),
     ).toBeVisible();
+    await expect(page.locator(".booking-topic")).toHaveText(
+      "План разговора:\n- обсудить сроки\n- согласовать бюджет",
+    );
     expect(sent).toHaveLength(2);
     expect(sent[1]).toEqual(sent[0]);
+    expect(sent[0]!.body).toMatchObject({ topic });
+    const owner = await (
+      await fetch(`${backend.url}/api/owner/bookings?period=all`)
+    ).json();
+    expect(owner.data).toHaveLength(1);
+    expect(owner.data[0]).toMatchObject({
+      topic: "План разговора:\n- обсудить сроки\n- согласовать бюджет",
+    });
   });
 }
 
