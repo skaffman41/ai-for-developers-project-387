@@ -138,7 +138,7 @@ test("v2→v3 preserves original type identity, success and rejection replays ac
     const connection = new DatabaseSync(database.path);
     try {
       expect(connection.prepare("PRAGMA user_version").get()).toEqual({
-        user_version: 3,
+        user_version: 4,
       });
       expect(resultRows(connection)).toEqual(before);
       expect(
@@ -149,6 +149,125 @@ test("v2→v3 preserves original type identity, success and rejection replays ac
     }
     backend = await startBackend(database.path);
     await expectSavedReplays(backend.url);
+  } finally {
+    await backend?.stop();
+    await database.dispose();
+  }
+});
+
+// Frozen v3 schema with one saved booking and no topic column.
+function prepareVersionThree(path: string) {
+  const database = new DatabaseSync(path);
+  try {
+    database.exec(`CREATE TABLE event_types (
+  sequence INTEGER PRIMARY KEY AUTOINCREMENT,
+  id TEXT NOT NULL UNIQUE,
+  name TEXT NOT NULL CHECK (length(name) BETWEEN 1 AND 100),
+  duration_minutes INTEGER NOT NULL CHECK (duration_minutes BETWEEN 1 AND 540),
+  description TEXT CHECK (description IS NULL OR length(description) BETWEEN 1 AND 2000),
+  created_at INTEGER NOT NULL
+) STRICT`);
+    database.exec(`CREATE TABLE operation_results (
+  operation TEXT NOT NULL,
+  attempt_key TEXT NOT NULL,
+  raw_payload TEXT NOT NULL,
+  status INTEGER NOT NULL,
+  body TEXT NOT NULL,
+  PRIMARY KEY (operation, attempt_key)
+) STRICT`);
+    database.exec(`CREATE TABLE bookings (
+  id TEXT PRIMARY KEY NOT NULL,
+  event_type_id TEXT NOT NULL REFERENCES event_types(id),
+  starts_at INTEGER NOT NULL,
+  ends_at INTEGER NOT NULL CHECK (ends_at > starts_at),
+  guest_name TEXT NOT NULL CHECK (length(guest_name) BETWEEN 1 AND 100),
+  guest_email TEXT NOT NULL CHECK (length(guest_email) BETWEEN 1 AND 254)
+) STRICT`);
+    database.exec(
+      "CREATE INDEX bookings_interval ON bookings (starts_at, ends_at)",
+    );
+    database.exec("PRAGMA application_id=1128352817; PRAGMA user_version=3");
+    database
+      .prepare(
+        "INSERT INTO event_types (id,name,duration_minutes,description,created_at) VALUES (?,?,?,?,?)",
+      )
+      .run("saved", "Сохранённый тип", 45, "Сохраняем описание", 100);
+    database
+      .prepare(
+        "INSERT INTO bookings (id,event_type_id,starts_at,ends_at,guest_name,guest_email) VALUES (?,?,?,?,?,?)",
+      )
+      .run(
+        "saved-booking",
+        "saved",
+        Date.parse("2026-11-09T06:00:00Z"),
+        Date.parse("2026-11-09T06:45:00Z"),
+        "Старый гость",
+        "old@example.com",
+      );
+  } finally {
+    database.close();
+  }
+}
+
+test("v3→v4 preserves saved bookings and accepts a topic on new bookings", async () => {
+  const database = await temporaryDatabase();
+  let backend: Awaited<ReturnType<typeof startBackend>> | undefined;
+  try {
+    prepareVersionThree(database.path);
+    const clock = join(database.directory, "clock.txt");
+    await writeFile(clock, "2026-11-09T05:00:00.000Z");
+    backend = await startBackend(database.path, 0, {
+      entry: "tests/support/clock-server.ts",
+      env: { TEST_CLOCK_PATH: clock },
+    });
+    const owner = await (
+      await fetch(`${backend.url}/api/owner/bookings?period=all`)
+    ).json();
+    expect(owner.data).toEqual([
+      {
+        id: "saved-booking",
+        eventType: savedType,
+        startsAt: "2026-11-09T06:00:00.000Z",
+        endsAt: "2026-11-09T06:45:00.000Z",
+        guestName: "Старый гость",
+        guestEmail: "old@example.com",
+      },
+    ]);
+    const created = await fetch(`${backend.url}/api/bookings`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "Idempotency-Key": "33333333-3333-4333-8333-333333333333",
+      },
+      body: JSON.stringify({
+        eventTypeId: "saved",
+        startsAt: "2026-11-09T07:00:00.000Z",
+        guestName: "Новый гость",
+        guestEmail: "new@example.com",
+        topic: "Новая тема",
+      }),
+    });
+    expect(created.status).toBe(201);
+    expect((await created.json()).data.topic).toBe("Новая тема");
+    await backend.stop();
+    backend = undefined;
+    const connection = new DatabaseSync(database.path);
+    try {
+      expect(connection.prepare("PRAGMA user_version").get()).toEqual({
+        user_version: 4,
+      });
+      expect(connection.prepare("PRAGMA foreign_key_check").all()).toEqual([]);
+      expect(
+        connection
+          .prepare("SELECT id,topic FROM bookings ORDER BY starts_at")
+          .all(),
+      ).toEqual([
+        { id: "saved-booking", topic: null },
+        { id: expect.any(String), topic: "Новая тема" },
+      ]);
+    } finally {
+      connection.close();
+    }
   } finally {
     await backend?.stop();
     await database.dispose();
@@ -232,7 +351,7 @@ test("a supported v1 database upgrades transactionally, keeps type identity and 
     const connection = new DatabaseSync(database.path);
     try {
       expect(connection.prepare("PRAGMA user_version").get()).toEqual({
-        user_version: 3,
+        user_version: 4,
       });
       expect(connection.prepare("PRAGMA foreign_key_check").all()).toEqual([]);
       connection

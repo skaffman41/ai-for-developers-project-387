@@ -188,6 +188,9 @@ export function OwnerBookings({
                     <a href={`mailto:${booking.guestEmail}`}>
                       {booking.guestEmail}
                     </a>
+                    {booking.topic && (
+                      <p className="booking-topic">{booking.topic}</p>
+                    )}
                   </div>
                 </li>
               );

@@ -14,6 +14,7 @@ async function ownerFixture(
     setTime: (value: string) => Promise<void>;
   }) => Promise<void>,
   empty = false,
+  topics: Record<string, string> = {},
 ) {
   const database = await temporaryDatabase();
   let backend: Awaited<ReturnType<typeof startBackend>> | undefined;
@@ -32,10 +33,20 @@ async function ownerFixture(
           ["current", "2026-11-09T06:00:00Z", "2026-11-09T06:45:00Z"],
           ["ended", "2026-11-09T05:15:00Z", "2026-11-09T06:00:00Z"],
           ["history", "2020-01-01T21:00:00Z", "2020-01-01T21:45:00Z"],
-        ])
+        ]) {
+          const topic = topics[id!];
+          const columns = [
+            "id",
+            "event_type_id",
+            "starts_at",
+            "ends_at",
+            "guest_name",
+            "guest_email",
+            ...(topic === undefined ? [] : ["topic"]),
+          ];
           connection
             .prepare(
-              "INSERT INTO bookings (id,event_type_id,starts_at,ends_at,guest_name,guest_email) VALUES (?,?,?,?,?,?)",
+              `INSERT INTO bookings (${columns.join(",")}) VALUES (${columns.map(() => "?").join(",")})`,
             )
             .run(
               id!,
@@ -44,7 +55,9 @@ async function ownerFixture(
               Date.parse(end!),
               "Анна Петрова",
               "Anna+project@example.com",
+              ...(topic === undefined ? [] : [topic]),
             );
+        }
     } finally {
       connection.close();
     }
@@ -118,6 +131,44 @@ test("owner periods use server end boundaries and retain whole history with cano
       ).data.map((value: { id: string }) => value.id),
     ).toEqual(["current", "ended", "history"]);
   });
+});
+
+test("owner topic appears in every period and is absent for older bookings", async () => {
+  await ownerFixture(
+    async ({ url }) => {
+      const get = async (period: string) =>
+        (
+          await (
+            await fetch(`${url}/api/owner/bookings?period=${period}`)
+          ).json()
+        ).data as { id: string; topic?: string }[];
+      for (const period of ["upcoming", "past", "all"]) {
+        const values = await get(period);
+        if (period !== "past") {
+          expect(values.find((value) => value.id === "future")?.topic).toBe(
+            "Будущая тема\nвторая строка",
+          );
+          expect(values.find((value) => value.id === "current")?.topic).toBe(
+            "Текущая тема",
+          );
+        }
+        if (period !== "upcoming")
+          expect(values.find((value) => value.id === "ended")?.topic).toBe(
+            "Прошедшая тема",
+          );
+        if (period !== "upcoming")
+          expect(
+            values.find((value) => value.id === "history"),
+          ).not.toHaveProperty("topic");
+      }
+    },
+    false,
+    {
+      future: "Будущая тема\nвторая строка",
+      current: "Текущая тема",
+      ended: "Прошедшая тема",
+    },
+  );
 });
 
 test("empty owner periods succeed while invalid, duplicate and extra parameters are rejected strictly", async () => {

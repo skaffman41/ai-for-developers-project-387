@@ -104,6 +104,7 @@ export function BookingConfirmation({
       <Summary eventType={booking.eventType} slot={booking} />
       <p>{booking.guestName}</p>
       <p>{booking.guestEmail}</p>
+      {booking.topic && <p className="booking-topic">{booking.topic}</p>}
       {message && <p role="alert">{message}</p>}
       <button type="button" className="reload-button" onClick={startAnother}>
         Записаться ещё раз
@@ -133,6 +134,7 @@ export function BookingContacts({
   const [draft, setDraft] = useState(() => ({
     guestName: restored.pending?.payload.input.guestName ?? "",
     guestEmail: restored.pending?.payload.input.guestEmail ?? "",
+    topic: restored.pending?.payload.input.topic ?? "",
   }));
   const [pending, setPending] = useState(restored.pending);
   const [phase, setPhase] = useState<"idle" | "sending" | "unknown">(
@@ -152,7 +154,9 @@ export function BookingContacts({
   useEffect(() => {
     if (phase === "idle" && focusErrors.current) {
       focusErrors.current = false;
-      const field = ["guestName", "guestEmail"].find((name) => name in errors);
+      const field = ["guestName", "guestEmail", "topic"].find(
+        (name) => name in errors,
+      );
       if (field)
         form.current?.querySelector<HTMLElement>(`[name="${field}"]`)?.focus();
     }
@@ -205,10 +209,13 @@ export function BookingContacts({
   function submit(event: React.SubmitEvent) {
     event.preventDefault();
     if (phase !== "idle" || !slot || sending.current) return;
+    const topic = draft.topic.trim();
     const input = {
       eventTypeId: eventType.id,
       startsAt: slot.startsAt,
-      ...draft,
+      guestName: draft.guestName,
+      guestEmail: draft.guestEmail,
+      ...(topic ? { topic: draft.topic } : {}),
     };
     const invalid = schemaErrors("BookingDraft", normalizeBooking(input));
     const values = Object.fromEntries(
@@ -218,7 +225,9 @@ export function BookingContacts({
           ? "Имя: от 1 до 100 символов, без переносов строк"
           : name === "guestEmail"
             ? "Укажите корректный email, не более 254 символов"
-            : "Проверьте выбранное время",
+            : name === "topic"
+              ? "Тема разговора: не более 200 символов, без пробелов по краям"
+              : "Проверьте выбранное время",
       ]),
     );
     setErrors(values);
@@ -290,6 +299,26 @@ export function BookingContacts({
         />
         <p id="guest-email-error" className="field-error">
           {errors.guestEmail}
+        </p>
+        <label htmlFor="booking-topic">Тема разговора</label>
+        <textarea
+          id="booking-topic"
+          name="topic"
+          rows={3}
+          value={draft.topic}
+          disabled={locked}
+          onChange={(event) => {
+            setDraft((current) => ({
+              ...current,
+              topic: event.target.value,
+            }));
+            setErrors((current) => ({ ...current, topic: "" }));
+          }}
+          aria-invalid={!!errors.topic}
+          aria-describedby="booking-topic-error"
+        />
+        <p id="booking-topic-error" className="field-error">
+          {errors.topic}
         </p>
         {errors.form && <p role="alert">{errors.form}</p>}
         <div className="booking-actions">

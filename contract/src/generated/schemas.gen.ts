@@ -104,6 +104,12 @@ export const BookingSchema = {
       maxLength: 254,
       format: "email",
     },
+    topic: {
+      type: "string",
+      minLength: 1,
+      maxLength: 200,
+      pattern: "^\\S(?:[\\s\\S]*\\S)?$",
+    },
   },
   unevaluatedProperties: {
     not: {},
@@ -133,6 +139,12 @@ export const BookingDraftSchema = {
       type: "string",
       maxLength: 254,
       format: "email",
+    },
+    topic: {
+      type: "string",
+      minLength: 1,
+      maxLength: 200,
+      pattern: "^\\S(?:[\\s\\S]*\\S)?$",
     },
   },
   unevaluatedProperties: {
@@ -304,6 +316,9 @@ export const CreateBookingInputSchema = {
       type: "string",
     },
     guestEmail: {
+      type: "string",
+    },
+    topic: {
       type: "string",
     },
   },

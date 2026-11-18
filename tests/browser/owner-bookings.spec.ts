@@ -19,11 +19,13 @@ test.use({
         eventTypeId: "type",
         startsAt: "2027-01-01T21:00:00Z",
         endsAt: "2027-01-01T21:45:00Z",
+        topic: "Будущая тема\nвторая строка",
       },
       {
         eventTypeId: "type",
         startsAt: "2026-11-09T06:00:00Z",
         endsAt: "2026-11-09T06:45:00Z",
+        topic: "Текущая тема",
       },
       {
         eventTypeId: "type",
@@ -56,8 +58,10 @@ test("owner opens upcoming bookings and navigates periods and persistent tabs by
   await expect(rows.first()).toContainText("09:00–09:45");
   await expect(rows.first()).toContainText("45 мин.");
   await expect(rows.first()).toContainText("guest@example.com");
+  await expect(rows.first()).toContainText("Текущая тема");
   await expect(rows.last()).toContainText("Предстоящая");
   await expect(rows.last()).toContainText("2 января 2027");
+  await expect(rows.last()).toContainText("Будущая тема\nвторая строка");
   await expect(bookings.getByRole("status")).toContainText(
     "09.11.2026, 09:00:00",
   );
@@ -65,6 +69,7 @@ test("owner opens upcoming bookings and navigates periods and persistent tabs by
   await expect(rows).toHaveCount(3);
   await expect(rows.first()).toContainText("Завершившаяся");
   await expect(rows.first()).toContainText("2 января 2020");
+  await expect(rows.first().locator(".booking-topic")).toHaveCount(0);
   await observe(page, info, "owner-history");
   const tab = page.getByRole("tab", { name: "Бронирования", exact: true });
   await tab.focus();

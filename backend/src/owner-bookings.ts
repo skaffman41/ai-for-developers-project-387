@@ -29,5 +29,6 @@ export function ownerBookings(
       endsAt: new Date(Number(row.ends_at)).toISOString(),
       guestName: String(row.guest_name),
       guestEmail: String(row.guest_email),
+      ...(row.topic == null ? {} : { topic: String(row.topic) }),
     }));
 }

@@ -153,6 +153,12 @@ Responses: 200, 400, 500, 503.
         "type": "string",
         "maxLength": 254,
         "format": "email"
+      },
+      "topic": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 200,
+        "pattern": "^\\S(?:[\\s\\S]*\\S)?$"
       }
     },
     "unevaluatedProperties": {
@@ -182,6 +188,12 @@ Responses: 200, 400, 500, 503.
         "type": "string",
         "maxLength": 254,
         "format": "email"
+      },
+      "topic": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 200,
+        "pattern": "^\\S(?:[\\s\\S]*\\S)?$"
       }
     },
     "unevaluatedProperties": {
@@ -347,6 +359,9 @@ Responses: 200, 400, 500, 503.
         "type": "string"
       },
       "guestEmail": {
+        "type": "string"
+      },
+      "topic": {
         "type": "string"
       }
     },
