@@ -134,7 +134,7 @@ export function BookingContacts({
   const [draft, setDraft] = useState(() => ({
     guestName: restored.pending?.payload.input.guestName ?? "",
     guestEmail: restored.pending?.payload.input.guestEmail ?? "",
-    topic: "",
+    topic: restored.pending?.payload.input.topic ?? "",
   }));
   const [pending, setPending] = useState(restored.pending);
   const [phase, setPhase] = useState<"idle" | "sending" | "unknown">(
