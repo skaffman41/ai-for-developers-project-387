@@ -79,41 +79,96 @@ assert.ok(
   !events.some((event) => event.type === "error"),
   "Model reported an error",
 );
-const response = events
-  .filter((event) => event.type === "text" && event.part?.text?.trim())
-  .at(-1)?.part.text;
-assert.ok(typeof response === "string", "Model returned no review");
-const review = JSON.parse(response);
-assert.ok(
-  typeof review.summary === "string" && review.summary.trim(),
-  "Missing review summary",
+const textEvents = events.filter(
+  (event) =>
+    event.type === "text" &&
+    typeof event.part?.text === "string" &&
+    event.part.text.trim(),
 );
-assert.ok(Array.isArray(review.findings), "Missing findings array");
-assert.ok(review.findings.length <= 50, "Too many findings");
-for (const finding of review.findings) {
-  assert.ok(
-    typeof finding.file === "string" &&
-      finding.file.trim() &&
-      !finding.file.startsWith("/") &&
-      !finding.file.split("/").includes(".."),
-    "Finding needs a repository file",
+const lastText = textEvents.at(-1);
+assert.ok(lastText, "Model returned no review");
+const messageID = lastText.part.messageID;
+const parts = new Map();
+for (const event of textEvents) {
+  if (
+    typeof messageID === "string"
+      ? event.part.messageID !== messageID
+      : event !== lastText
+  )
+    continue;
+  parts.set(
+    typeof event.part.id === "string" ? event.part.id : Symbol(),
+    event.part.text,
   );
+}
+const response = Array.from(parts.values()).join("\n\n");
+const text = response.trim();
+assert.ok(text, "Model returned an empty review");
+// --format json describes CLI events, not the assistant's text inside them.
+// Keep prose as prose; do not fabricate an empty structured findings array.
+const fence = /^```(json)?[ \t]*\r?\n([\s\S]*?)\r?\n```$/i.exec(text);
+const candidate = fence?.[2] ?? text;
+const opensJSONFence =
+  /^```json[ \t]*(?:\r?\n|$)/i.test(text) || /^```[ \t]*\r?\n\s*\{/.test(text);
+let structured = true;
+let decoded;
+try {
+  decoded = JSON.parse(candidate);
+} catch {
   assert.ok(
-    Number.isSafeInteger(finding.line) && finding.line > 0,
-    "Finding needs a line",
+    !opensJSONFence && !candidate.trimStart().startsWith("{"),
+    "Malformed JSON review",
   );
-  for (const value of [finding.conditions, finding.consequences]) {
+  structured = false;
+}
+let resultBody;
+if (!structured) {
+  assert.ok(text.length <= 50_000, "Review text too large");
+  resultBody = { sha, text };
+} else {
+  assert.ok(
+    decoded && typeof decoded === "object" && !Array.isArray(decoded),
+    "Invalid review object",
+  );
+  /** @param {unknown} value */
+  const boundedText = (value) =>
+    typeof value === "string" &&
+    value.trim().length > 0 &&
+    value.length <= 5000;
+  assert.ok(boundedText(decoded.summary), "Missing review summary");
+  assert.ok(Array.isArray(decoded.findings), "Missing findings array");
+  assert.ok(decoded.findings.length <= 50, "Too many findings");
+  const findings = [];
+  for (const finding of decoded.findings) {
     assert.ok(
-      typeof value === "string" && value.trim(),
+      boundedText(finding.file) &&
+        !finding.file.startsWith("/") &&
+        !finding.file.split("/").includes(".."),
+      "Finding needs a repository file",
+    );
+    assert.ok(
+      Number.isSafeInteger(finding.line) && finding.line > 0,
+      "Finding needs a line",
+    );
+    assert.ok(
+      boundedText(finding.conditions) && boundedText(finding.consequences),
       "Finding needs conditions and consequences",
     );
+    findings.push({
+      file: finding.file,
+      line: finding.line,
+      conditions: finding.conditions,
+      consequences: finding.consequences,
+    });
   }
+  resultBody = { sha, review: { summary: decoded.summary, findings } };
 }
+const serialized = JSON.stringify(resultBody);
 assert.ok(
-  JSON.stringify({ sha, review }).length < 55_000,
+  Buffer.byteLength(serialized, "utf8") < 55_000,
   "Review result too large",
 );
-await writeFile(join(root, "review.json"), JSON.stringify({ sha, review }));
+await writeFile(join(root, "review.json"), serialized);
 console.log(
   `Read-only review produced a result for ${sha}; publication is a separate job`,
 );
