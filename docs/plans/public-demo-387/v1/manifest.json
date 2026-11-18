@@ -1,0 +1,27 @@
+{
+  "schemaVersion": 1,
+  "repository": "skaffman41/ai-for-developers-project-387",
+  "feature": "public-demo-387",
+  "version": "v1",
+  "approved": true,
+  "approval": "2026-11-18: владелец прямо попросил запустить/собрать приложение и дать публичный адрес наставнику, затем подтвердил публикацию после merge. Merge PR57 разрешён отдельным «Мержим», чтение Usage — отдельным «Разрешаю прочитать Usage». Выкладка выполнена и проверена; этот снимок фиксирует объём документирования до изменения README/deployment docs.",
+  "baseCommit": "0e374ac4572ce8b22b3fb5f97496b022a5b479a7",
+  "records": [
+    {
+      "file": "61.md",
+      "number": 61,
+      "url": "https://github.com/skaffman41/ai-for-developers-project-387/issues/61",
+      "title": "Обновить публичный стенд на проект 387 и актуализировать описание выкладки",
+      "parent": null,
+      "blockedBy": [],
+      "snapshotSha256": "1d9d16c7bdd97fa9d7e32b6c6ddc612502de32e569b29e7612ac5194ceeb7703",
+      "publishedBodySha256": "1d9d16c7bdd97fa9d7e32b6c6ddc612502de32e569b29e7612ac5194ceeb7703"
+    }
+  ],
+  "testingDecisions": {
+    "newTests": false,
+    "operation": "Docker build, own temporary container HTTP probes and real Railway source/deployment/HTTPS asset checks outside Git",
+    "documentation": "facts, links, Prettier, git diff --check, existing pre-commit lint/format; no runtime change"
+  },
+  "completionBoundary": "External deployment0e374ac verified SUCCESS; docs remain local until separately permitted publication/merge. Preserve November11 history. Additional direct user request, not a change of spec53 requirements."
+}
