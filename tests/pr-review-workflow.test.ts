@@ -582,7 +582,7 @@ test("Review verification permits only read/glob/skill and preparation rejects a
     const agent = {
       name: "github-pr-review",
       mode: "primary",
-      model: { providerID: "opencode", modelID: "glm-5.3-flash-free" },
+      model: { providerID: "opencode", modelID: "deepseek-v4.1-flash-free" },
       tools: {
         read: true,
         glob: true,

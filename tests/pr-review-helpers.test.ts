@@ -63,7 +63,7 @@ if (process.argv[2] === '--version') {
   console.log('1.19.6');
   process.exit(0);
 }
-assert.deepEqual(process.argv.slice(2), ['run', '--agent', 'github-pr-review', '--model', 'opencode/glm-5.3-flash-free', '--format', 'json']);
+assert.deepEqual(process.argv.slice(2), ['run', '--agent', 'github-pr-review', '--model', 'opencode/deepseek-v4.1-flash-free', '--format', 'json']);
 for (const key of ['GH_TOKEN', 'GITHUB_TOKEN', 'ACTIONS_RUNTIME_TOKEN', 'ACTIONS_ID_TOKEN_REQUEST_TOKEN', 'ACTIONS_ID_TOKEN_REQUEST_URL']) {
   assert.equal(process.env[key], undefined, 'GitHub credential exposed to model child');
 }

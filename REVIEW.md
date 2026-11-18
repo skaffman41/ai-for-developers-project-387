@@ -115,7 +115,7 @@
   Дефект: расширение прав «на всякий случай», свободные credentials у checkout,
   право записи истории Actions у токена агента.
 - Проверять: закреплённые версии сохраняются — opencode action и runtime
-  1.19.6, модель `opencode/glm-5.3-flash-free` без платного fallback,
+  1.19.6, модель `opencode/deepseek-v4.1-flash-free` без платного fallback,
   `mise.lock`, `package-lock.json`, версии действий GitHub по закреплённым
   ссылкам. Обновление версии — отдельное согласованное решение, а не попутная
   правка.

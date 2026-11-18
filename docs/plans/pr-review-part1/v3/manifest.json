@@ -1,0 +1,65 @@
+{
+  "repository": "skaffman41/ai-for-developers-project-387",
+  "version": 3,
+  "approved": true,
+  "approval": "Explicit owner instruction in session 2026-11-18: Разрешаю замену на DeepSeek и публикацию bootstrap PR",
+  "approvalRecord": "https://github.com/skaffman41/ai-for-developers-project-387/issues/28#issuecomment-6975155706",
+  "baseCommit": "d084a05a32dd1a7e52aa1c1c79d35fa290fbe690",
+  "previousVersion": "../v2/manifest.json",
+  "changeScope": "AC-09 exception: pin opencode/deepseek-v4.1-flash-free; no other versions, requirements or dependency changes",
+  "issues": {
+    "26": {
+      "url": "https://github.com/skaffman41/ai-for-developers-project-387/issues/26",
+      "file": "spec.md",
+      "blockedBy": [],
+      "publishedBodySha256": "7b1251696149406c9361999cdf777182b31faff9c8c44b0f0e0f938730b2ead3",
+      "stateAtSnapshot": "open"
+    },
+    "27": {
+      "url": "https://github.com/skaffman41/ai-for-developers-project-387/issues/27",
+      "file": "27-review-criteria-and-pr-template.md",
+      "blockedBy": [],
+      "publishedBodySha256": "894df9b303538a05df6f944c666ab25795ca022b34bc4d35e7617bbc71bfe487",
+      "stateAtSnapshot": "closed"
+    },
+    "28": {
+      "url": "https://github.com/skaffman41/ai-for-developers-project-387/issues/28",
+      "file": "28-pr-review-workflow.md",
+      "blockedBy": [27],
+      "publishedBodySha256": "126619e48c3e8233b226947caaae9da1fbe513fe15bfbbc8e884aaa1cb3e6bb9",
+      "stateAtSnapshot": "closed"
+    },
+    "29": {
+      "url": "https://github.com/skaffman41/ai-for-developers-project-387/issues/29",
+      "file": "29-manual-run-budget-reporter.md",
+      "blockedBy": [],
+      "publishedBodySha256": "2ab0ae7feec1efb912d0471fec77c99bdb58e5c5ff407a313a7fb9772fdec956",
+      "stateAtSnapshot": "closed"
+    },
+    "30": {
+      "url": "https://github.com/skaffman41/ai-for-developers-project-387/issues/30",
+      "file": "30-browser-version-job.md",
+      "blockedBy": [],
+      "publishedBodySha256": "715720ac1536e8d72b038aeda0d9c0b6a0baf8e5aa1506e017575db68aa99b87",
+      "stateAtSnapshot": "closed"
+    },
+    "31": {
+      "url": "https://github.com/skaffman41/ai-for-developers-project-387/issues/31",
+      "file": "31-review-documentation.md",
+      "blockedBy": [28, 29, 30],
+      "publishedBodySha256": "5dad9d84ed0543b8c6062782adc3c58aee85fd9d6e7f6b508e93c6d7666caeb6",
+      "stateAtSnapshot": "closed"
+    }
+  },
+  "fileSha256": {
+    "27-review-criteria-and-pr-template.md": "889d8dc328bdc412c3f8d402f6801389cd122e63d96c955cda3703836c6c5e44",
+    "28-pr-review-workflow.md": "7794fafe029fa5c86bbac7bc57b4c20c1e6eb33ebef74868f83b9dcc3489918d",
+    "29-manual-run-budget-reporter.md": "aabd947d00ed2a5191baa82c01f09b75d1e29dbf0f455d16062f79e1daa322f4",
+    "30-browser-version-job.md": "31327134dbc05f65d2008421d7ba95b6024dcc627976c338386308686651ed0b",
+    "31-review-documentation.md": "c2eeada68f36a7407b889ebebfb80926b7a3e175938937ccabd183016e85eb90",
+    "clarification.md": "18c1d2f2b4719566bc968b799b69e00f241b9d2ba4bd9fa8d40c57ce53b464e0",
+    "spec.md": "7b1251696149406c9361999cdf777182b31faff9c8c44b0f0e0f938730b2ead3"
+  },
+  "frontier": [],
+  "repairIssue": 28
+}

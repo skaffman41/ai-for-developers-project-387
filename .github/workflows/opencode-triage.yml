@@ -77,7 +77,7 @@ jobs:
           VERSION: "1.19.6"
           OPENCODE_API_KEY: ${{ secrets.OPENCODE_API_KEY }}
         with:
-          model: opencode/glm-5.3-flash-free
+          model: opencode/deepseek-v4.1-flash-free
           share: "false"
           prompt: |
             Выполни предварительный разбор нового обращения по скиллу triage.
