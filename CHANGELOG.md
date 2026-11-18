@@ -1,5 +1,40 @@
 # Changelog
 
+## [0.5.0](https://github.com/skaffman41/ai-for-developers-project-387/compare/v0.4.0...v0.5.0) (2026-11-18)
+
+
+### Features
+
+* **ci:** bound manual PR attempts and report failures ([#29](https://github.com/skaffman41/ai-for-developers-project-387/issues/29)) ([b96983f](https://github.com/skaffman41/ai-for-developers-project-387/commit/b96983fe458f4d4df98ac3079616a3d9acc34f54))
+* **ci:** integrate PR review infrastructure ([#26](https://github.com/skaffman41/ai-for-developers-project-387/issues/26)) ([d084a05](https://github.com/skaffman41/ai-for-developers-project-387/commit/d084a05a32dd1a7e52aa1c1c79d35fa290fbe690))
+* **ci:** preserve exact PR browser evidence ([#30](https://github.com/skaffman41/ai-for-developers-project-387/issues/30)) ([a8a2725](https://github.com/skaffman41/ai-for-developers-project-387/commit/a8a2725c0509eb4b069cfce60f43ba34350df078))
+* **ci:** ревью PR, бюджет запусков и браузерные артефакты ([#26](https://github.com/skaffman41/ai-for-developers-project-387/issues/26)) ([d084a05](https://github.com/skaffman41/ai-for-developers-project-387/commit/d084a05a32dd1a7e52aa1c1c79d35fa290fbe690))
+* **review:** add isolated read-only PR review ([#28](https://github.com/skaffman41/ai-for-developers-project-387/issues/28)) ([4d3a001](https://github.com/skaffman41/ai-for-developers-project-387/commit/4d3a0013dfe9c6075e6335c123db130eed81dd55))
+
+
+### Bug Fixes
+
+* **ci:** admit PR reviews before cancellation ([#28](https://github.com/skaffman41/ai-for-developers-project-387/issues/28)) ([be0c310](https://github.com/skaffman41/ai-for-developers-project-387/commit/be0c3106c775af13b9d567c88cb696a8c48790aa))
+* **ci:** allow manual reports on pull requests ([#29](https://github.com/skaffman41/ai-for-developers-project-387/issues/29)) ([cd0800d](https://github.com/skaffman41/ai-for-developers-project-387/commit/cd0800dced714b5a19a9c9e80ce568a4d8992e28))
+* **ci:** authenticate manual admission history ([#29](https://github.com/skaffman41/ai-for-developers-project-387/issues/29)) ([b8ae266](https://github.com/skaffman41/ai-for-developers-project-387/commit/b8ae26688cd9d0bc6a3912ad77ee98952b923f76))
+* **ci:** bind manual reporter to workflow identity ([#29](https://github.com/skaffman41/ai-for-developers-project-387/issues/29)) ([50ffc02](https://github.com/skaffman41/ai-for-developers-project-387/commit/50ffc0266788a26e7ed315424a08911d68c4bd8a))
+* **ci:** bind PR reporter to workflow identity ([#28](https://github.com/skaffman41/ai-for-developers-project-387/issues/28)) ([fc56ce5](https://github.com/skaffman41/ai-for-developers-project-387/commit/fc56ce51a294afc88a1715e05739089e719f2640))
+* **ci:** complete trusted PR review bootstrap ([#28](https://github.com/skaffman41/ai-for-developers-project-387/issues/28)) ([ae83d32](https://github.com/skaffman41/ai-for-developers-project-387/commit/ae83d32e3cff960ceb9ce66689a614a0fff05e38))
+* **ci:** complete trusted review bootstrap dependencies ([#28](https://github.com/skaffman41/ai-for-developers-project-387/issues/28)) ([bd98509](https://github.com/skaffman41/ai-for-developers-project-387/commit/bd98509a86f519e28de599b12fdb6020c61d0587))
+* **ci:** expose safe review progress and failure diagnostics ([#28](https://github.com/skaffman41/ai-for-developers-project-387/issues/28)) ([e658d09](https://github.com/skaffman41/ai-for-developers-project-387/commit/e658d0988b73abf67d4a23f53062b93b71c0c5de))
+* **ci:** merge approved DeepSeek bootstrap ([#28](https://github.com/skaffman41/ai-for-developers-project-387/issues/28)) ([b4f264d](https://github.com/skaffman41/ai-for-developers-project-387/commit/b4f264d3167049027a84f70a739b17619dcb5bbd))
+* **ci:** merge manual reports and Russian PR reviews ([#26](https://github.com/skaffman41/ai-for-developers-project-387/issues/26)) ([855cc3c](https://github.com/skaffman41/ai-for-developers-project-387/commit/855cc3c9b44b5bdff933d7ae70a93ac9e91df6dc))
+* **ci:** pin approved free DeepSeek model ([#28](https://github.com/skaffman41/ai-for-developers-project-387/issues/28)) ([053c9d4](https://github.com/skaffman41/ai-for-developers-project-387/commit/053c9d4a2f1914d3b22032fb0f5ae4d83137a37b))
+* **ci:** publish bounded CLI text reviews ([#28](https://github.com/skaffman41/ai-for-developers-project-387/issues/28)) ([58dc49b](https://github.com/skaffman41/ai-for-developers-project-387/commit/58dc49bb24500a4f38e23d4c75e1753b22537ad1))
+* **ci:** publish manual reports and Russian PR reviews ([#26](https://github.com/skaffman41/ai-for-developers-project-387/issues/26)) ([855cc3c](https://github.com/skaffman41/ai-for-developers-project-387/commit/855cc3c9b44b5bdff933d7ae70a93ac9e91df6dc))
+* **ci:** replace retired free model with DeepSeek ([#28](https://github.com/skaffman41/ai-for-developers-project-387/issues/28)) ([b4f264d](https://github.com/skaffman41/ai-for-developers-project-387/commit/b4f264d3167049027a84f70a739b17619dcb5bbd))
+* **ci:** подготовить доверенный bootstrap авторевью PR ([#28](https://github.com/skaffman41/ai-for-developers-project-387/issues/28)) ([631c9b6](https://github.com/skaffman41/ai-for-developers-project-387/commit/631c9b623b010146159564f33e155d72360dc622))
+* **ci:** подготовить доверенный bootstrap авторевью PR ([#28](https://github.com/skaffman41/ai-for-developers-project-387/issues/28)) ([8647ceb](https://github.com/skaffman41/ai-for-developers-project-387/commit/8647ceb5adb5ed39a54c461fe2d507f8ad3177b3))
+* **review:** merge CLI output bootstrap ([#28](https://github.com/skaffman41/ai-for-developers-project-387/issues/28)) ([0c16f5c](https://github.com/skaffman41/ai-for-developers-project-387/commit/0c16f5cce02e4cf602bd64684b97fb75f08dca33))
+* **review:** preserve ordinary CLI review output ([#28](https://github.com/skaffman41/ai-for-developers-project-387/issues/28)) ([e8a8447](https://github.com/skaffman41/ai-for-developers-project-387/commit/e8a84472e62c66ad148f635341e1a7f17b405ab0))
+* **review:** request Russian PR review text ([#28](https://github.com/skaffman41/ai-for-developers-project-387/issues/28)) ([3e4c206](https://github.com/skaffman41/ai-for-developers-project-387/commit/3e4c2068790e50b87fe1ce40b874817d9f685f40))
+* **review:** поддержать текстовый ответ CLI ([#28](https://github.com/skaffman41/ai-for-developers-project-387/issues/28)) ([0c16f5c](https://github.com/skaffman41/ai-for-developers-project-387/commit/0c16f5cce02e4cf602bd64684b97fb75f08dca33))
+
 ## [0.4.0](https://github.com/skaffman41/ai-for-developers-project-387/compare/v0.3.0...v0.4.0) (2026-11-17)
 
 
