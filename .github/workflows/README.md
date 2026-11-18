@@ -18,6 +18,15 @@ approves the PR. Per-PR concurrency cancels obsolete reviews, and Actions histor
 prevents another model review of the same head, including Re-run. Automatic review
 does not spend the manual budget or start a correction loop.
 
+The review step supervises the trusted main helper and reports progress every
+30 seconds: elapsed time, event/stderr byte counts, the last event type, and a
+whitelisted provider error class/HTTP status when available. These counters show
+observed CLI output; a completed review requires a validated result and its
+publisher. The CLI limit remains 28 minutes inside the 30-minute job. On success
+or failure, `pr-review-diagnostics-<run_id>-<run_attempt>` retains only
+`review-diagnostics.json` for 14 days. Prompts, raw events, stderr and environment
+values are excluded. Cancellation may prevent this diagnostic upload.
+
 Its separate 15-minute browser job has no model secret: it checks out and verifies
 the exact PR head, then saves an HTML report, expected/actual SHA, traces and
 screenshots on success and failure. `pr-browser-<run_id>-<run_attempt>` artifacts

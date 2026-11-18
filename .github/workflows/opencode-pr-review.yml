@@ -227,11 +227,99 @@ jobs:
           OPENCODE_API_KEY: ${{ secrets.OPENCODE_API_KEY }}
           REVIEW_SHA: ${{ needs.authorize.outputs.head_sha }}
           GITHUB_REVIEW_DIRECTORY: ${{ github.workspace }}/review-data
-        run: node scripts/run-pr-review.mjs
+        run: |
+          node --input-type=module <<'JS'
+          import assert from 'node:assert/strict';
+          import { spawn } from 'node:child_process';
+          import { closeSync, fstatSync, openSync, readSync, writeFileSync } from 'node:fs';
+          import { join } from 'node:path';
+
+          const root = process.env.GITHUB_AGENT_ROOT;
+          const sha = process.env.REVIEW_SHA;
+          assert.ok(root && /^[a-f0-9]{40}$/.test(sha ?? ''));
+          const started = Date.now();
+          const kinds = new Set(['step_start', 'step_finish', 'tool_use', 'text', 'error']);
+          const errors = new Set(['APIError', 'UnknownError', 'ProviderAuthError', 'ContextOverflowError', 'ModelNotFoundError']);
+          let lastEvent = null;
+          let providerError = null;
+          // Inspect bounded tails, but never print or upload raw model text,
+          // stderr, prompts, headers or environment values.
+          function tail(file) {
+            if (!file) return { bytes: 0, text: '' };
+            let fd;
+            try {
+              fd = openSync(file, 'r');
+              const bytes = fstatSync(fd).size;
+              const buffer = Buffer.alloc(Math.min(bytes, 65536));
+              readSync(fd, buffer, 0, buffer.length, bytes - buffer.length);
+              let text = buffer.toString('utf8');
+              if (bytes > buffer.length) text = text.slice(text.indexOf('\n') + 1);
+              if (!text.endsWith('\n')) text = text.slice(0, text.lastIndexOf('\n') + 1);
+              return { bytes, text };
+            } catch (error) {
+              if (error.code === 'ENOENT') return { bytes: 0, text: '' };
+              throw error;
+            } finally {
+              if (fd !== undefined) closeSync(fd);
+            }
+          }
+          function report(phase, exitCode = null, signal = null) {
+            const events = tail(join(root, 'events.jsonl'));
+            const stderr = tail(join(root, 'model.stderr'));
+            for (const line of events.text.split('\n').filter(Boolean)) {
+              let event;
+              try { event = JSON.parse(line); } catch { continue; }
+              if (!event || typeof event !== 'object' || Array.isArray(event)) continue;
+              lastEvent = kinds.has(event.type) ? event.type : 'other';
+              if (event.type === 'error') {
+                const status = event.error?.data?.statusCode;
+                providerError = {
+                  name: errors.has(event.error?.name) ? event.error.name : 'other',
+                  status_code: Number.isInteger(status) && status >= 100 && status <= 599 ? status : null,
+                };
+              }
+            }
+            const timedOut = /^timed_out=true$/m.test(tail(process.env.GITHUB_OUTPUT).text);
+            const diagnostic = {
+              schema_version: 1, sha, phase: timedOut ? 'timeout' : phase,
+              elapsed_seconds: Math.floor((Date.now() - started) / 1000),
+              events_bytes: events.bytes, stderr_bytes: stderr.bytes,
+              last_event_type: lastEvent, provider_error: providerError,
+              exit_code: exitCode, signal: ['SIGTERM', 'SIGKILL', 'SIGINT'].includes(signal) ? signal : null,
+              timed_out: timedOut,
+            };
+            writeFileSync(join(root, 'review-diagnostics.json'), JSON.stringify(diagnostic) + '\n');
+            console.log('[pr-review-progress] ' + JSON.stringify(diagnostic));
+          }
+          // Execute only the existing trusted-main helper. It retains the
+          // pinned model, 28-minute limit and credential removal for its CLI.
+          const child = spawn(process.execPath, ['scripts/run-pr-review.mjs'], {
+            stdio: ['ignore', 'inherit', 'inherit'],
+          });
+          report('started');
+          const heartbeat = setInterval(() => report('running'), 30000);
+          const result = await new Promise(resolve => {
+            child.once('error', () => resolve({ code: 1, signal: null }));
+            child.once('close', (code, signal) => resolve({ code, signal }));
+          });
+          clearInterval(heartbeat);
+          report(result.code === 0 ? 'success' : 'failed', result.code, result.signal);
+          process.exitCode = result.code ?? 1;
+          JS
 
       - name: Read-only review timed out
         if: failure() && steps.model.outputs.timed_out == 'true'
         run: exit 1
+
+      - name: Preserve safe review diagnostics after success or failure
+        id: review_diagnostics
+        if: ${{ always() && !cancelled() && steps.model.outcome != 'skipped' }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: pr-review-diagnostics-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ env.GITHUB_AGENT_ROOT }}/review-diagnostics.json
+          if-no-files-found: error
+          retention-days: 14
 
       - name: Preserve only the review result for the no-model publisher
         if: steps.model.outcome == 'success'

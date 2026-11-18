@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
-import { execFileSync, spawnSync } from "node:child_process";
+import { execFileSync, spawn, spawnSync } from "node:child_process";
 import {
   chmod,
+  copyFile,
   mkdir,
   mkdtemp,
   readFile,
@@ -11,6 +12,7 @@ import {
 import { tmpdir } from "node:os";
 import { delimiter, join, resolve } from "node:path";
 import { test } from "vitest";
+import { parse } from "yaml";
 
 async function fixture() {
   const directory = await mkdtemp(join(tmpdir(), "pr-review-helpers-"));
@@ -67,6 +69,15 @@ for (const key of ['GH_TOKEN', 'GITHUB_TOKEN', 'ACTIONS_RUNTIME_TOKEN', 'ACTIONS
 }
 assert.match(readFileSync(0, 'utf8'), /TRUSTED_CHECKLIST/);
 writeFileSync(join(process.env.GITHUB_AGENT_ROOT, 'model-invoked'), 'fake CLI only');
+if (process.env.REVIEW_FAKE_DELAY || process.env.REVIEW_FAKE_FAILURE) {
+  console.error('SYNTHETIC_SECRET_DO_NOT_LOG');
+  console.log(JSON.stringify({ type: 'step_start' }));
+}
+if (process.env.REVIEW_FAKE_DELAY) await new Promise(resolve => setTimeout(resolve, 500));
+if (process.env.REVIEW_FAKE_FAILURE) {
+  console.log(JSON.stringify({ type: 'error', error: { name: 'APIError', data: { statusCode: 429, message: 'SYNTHETIC_SECRET_DO_NOT_LOG' } } }));
+  process.exit(7);
+}
 console.log(JSON.stringify({ type: 'text', part: { text: JSON.stringify({ summary: 'No defects found.', findings: [] }) } }));
 `,
   );
@@ -167,4 +178,179 @@ test("A checkout or context SHA mismatch stops before creating model input", asy
   } finally {
     await rm(state.directory, { recursive: true, force: true });
   }
+});
+
+async function modelStep(
+  state: Awaited<ReturnType<typeof fixture>>,
+  overrides: Record<string, string> = {},
+  helperSource?: string,
+) {
+  assert.equal(run("pr-review-input.mjs", state).status, 0);
+  await mkdir(join(state.trusted, "scripts"));
+  const helper = join(state.trusted, "scripts/run-pr-review.mjs");
+  if (helperSource === undefined)
+    await copyFile(resolve("scripts/run-pr-review.mjs"), helper);
+  else await writeFile(helper, helperSource);
+  const workflow = parse(
+    await readFile(".github/workflows/opencode-pr-review.yml", "utf8"),
+  );
+  const step = workflow.jobs.review.steps.find(
+    (item: { id?: string }) => item.id === "model",
+  );
+  const script = join(state.directory, "model-step.sh");
+  const clock = join(state.directory, "fast-clock.mjs");
+  await writeFile(script, step.run);
+  await writeFile(
+    clock,
+    "const original = globalThis.setInterval; globalThis.setInterval = (callback, ms, ...args) => original(callback, ms === 30000 ? 20 : ms, ...args);",
+  );
+  const child = spawn("bash", [script], {
+    cwd: state.trusted,
+    env: {
+      ...state.env,
+      ...overrides,
+      GITHUB_OUTPUT: join(state.runtime, "github-output"),
+      NODE_OPTIONS: `--import ${clock}`,
+    },
+  });
+  let stdout = "";
+  let stderr = "";
+  let progressWhileActive = false;
+  child.stdout.on("data", (data) => {
+    stdout += data.toString();
+    if (child.exitCode === null && /"events_bytes":\s*[1-9]/.test(stdout))
+      progressWhileActive = true;
+  });
+  child.stderr.on("data", (data) => {
+    stderr += data.toString();
+  });
+  const code = await new Promise<number | null>((resolve, reject) => {
+    child.once("error", reject);
+    child.once("close", resolve);
+  });
+  return { code, stdout, stderr, progressWhileActive, workflow };
+}
+
+test("The workflow reports safe progress while the review process is still working", async () => {
+  const state = await fixture();
+  try {
+    const result = await modelStep(state, { REVIEW_FAKE_DELAY: "1" });
+    assert.equal(result.code, 0, result.stderr);
+    assert.equal(
+      result.progressWhileActive,
+      true,
+      "Working CLI must be visible before it exits",
+    );
+    assert.ok(!result.stdout.includes("SYNTHETIC_SECRET_DO_NOT_LOG"));
+    const diagnostic = await readFile(
+      join(state.runtime, "review-diagnostics.json"),
+      "utf8",
+    );
+    assert.ok(!diagnostic.includes("SYNTHETIC_SECRET_DO_NOT_LOG"));
+    const report = JSON.parse(diagnostic);
+    assert.equal(report.sha, state.head);
+    assert.equal(report.phase, "success");
+    assert.ok(report.events_bytes > 0);
+    assert.ok(report.stderr_bytes > 0);
+  } finally {
+    await rm(state.directory, { recursive: true, force: true });
+  }
+});
+
+test("A failed CLI leaves useful diagnostic metadata without exposing its text", async () => {
+  const state = await fixture();
+  try {
+    const result = await modelStep(state, { REVIEW_FAKE_FAILURE: "1" });
+    assert.equal(result.code, 1);
+    assert.ok(
+      !(result.stdout + result.stderr).includes("SYNTHETIC_SECRET_DO_NOT_LOG"),
+    );
+    const diagnostic = await readFile(
+      join(state.runtime, "review-diagnostics.json"),
+      "utf8",
+    );
+    assert.ok(!diagnostic.includes("SYNTHETIC_SECRET_DO_NOT_LOG"));
+    assert.ok(!diagnostic.includes("fake-cli-only"));
+    const report = JSON.parse(diagnostic);
+    assert.equal(report.phase, "failed");
+    assert.equal(report.exit_code, 1);
+    assert.equal(report.last_event_type, "error");
+    assert.deepEqual(report.provider_error, {
+      name: "APIError",
+      status_code: 429,
+    });
+    await assert.rejects(readFile(join(state.runtime, "review.json")), {
+      code: "ENOENT",
+    });
+  } finally {
+    await rm(state.directory, { recursive: true, force: true });
+  }
+});
+
+test("A trusted helper timeout is preserved as timeout metadata after the process exits", async () => {
+  const state = await fixture();
+  try {
+    const helper =
+      "import { appendFileSync } from 'node:fs'; appendFileSync(process.env.GITHUB_OUTPUT, 'timed_out=true\\n'); process.exitCode = 1;";
+    const result = await modelStep(state, {}, helper);
+    assert.equal(result.code, 1);
+    const report = JSON.parse(
+      await readFile(join(state.runtime, "review-diagnostics.json"), "utf8"),
+    );
+    assert.equal(report.phase, "timeout");
+    assert.equal(report.timed_out, true);
+    assert.equal(report.exit_code, 1);
+    await assert.rejects(readFile(join(state.runtime, "model-invoked")), {
+      code: "ENOENT",
+    });
+  } finally {
+    await rm(state.directory, { recursive: true, force: true });
+  }
+});
+
+test("The diagnostic artifact runs after failure and uploads only safe metadata", async () => {
+  const workflow = parse(
+    await readFile(".github/workflows/opencode-pr-review.yml", "utf8"),
+  );
+  const step = workflow.jobs.review.steps.find(
+    (item: { id?: string }) => item.id === "review_diagnostics",
+  );
+  assert.ok(step);
+  const condition = step.if.slice(3, -2).trim();
+  const enabled = new Function(
+    "steps",
+    "always",
+    "cancelled",
+    `return (${condition});`,
+  );
+  for (const outcome of ["success", "failure"]) {
+    assert.equal(
+      enabled(
+        { model: { outcome } },
+        () => true,
+        () => false,
+      ),
+      true,
+    );
+  }
+  assert.equal(
+    enabled(
+      { model: { outcome: "skipped" } },
+      () => true,
+      () => false,
+    ),
+    false,
+  );
+  assert.equal(
+    enabled(
+      { model: { outcome: "failure" } },
+      () => true,
+      () => true,
+    ),
+    false,
+  );
+  assert.equal(
+    step.with.path,
+    "${{ env.GITHUB_AGENT_ROOT }}/review-diagnostics.json",
+  );
 });
