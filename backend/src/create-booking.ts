@@ -104,9 +104,17 @@ export function createBooking(
         const id = randomUUID();
         database
           .prepare(
-            "INSERT INTO bookings(id,event_type_id,starts_at,ends_at,guest_name,guest_email) VALUES (?,?,?,?,?,?)",
+            "INSERT INTO bookings(id,event_type_id,starts_at,ends_at,guest_name,guest_email,topic) VALUES (?,?,?,?,?,?,?)",
           )
-          .run(id, eventType.id, start, end, draft.guestName, draft.guestEmail);
+          .run(
+            id,
+            eventType.id,
+            start,
+            end,
+            draft.guestName,
+            draft.guestEmail,
+            draft.topic ?? null,
+          );
         return {
           status: 201,
           body: {
@@ -117,6 +125,7 @@ export function createBooking(
               ...slot,
               guestName: draft.guestName,
               guestEmail: draft.guestEmail,
+              ...(draft.topic === undefined ? {} : { topic: draft.topic }),
             },
           },
         };

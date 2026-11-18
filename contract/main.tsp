@@ -222,6 +222,12 @@ model Booking {
   guestName: string;
 
   @format("email") @maxLength(254) guestEmail: string;
+
+  @minLength(1)
+  @maxLength(200)
+  @pattern("^\\S(?:[\\s\\S]*\\S)?$")
+  topic?: string;
+
   ...Record<never>;
 }
 
@@ -235,6 +241,7 @@ model CreateBookingInput {
   startsAt: string;
   guestName: string;
   guestEmail: string;
+  topic?: string;
   ...Record<never>;
 }
 
@@ -248,6 +255,12 @@ model BookingDraft {
   guestName: string;
 
   @format("email") @maxLength(254) guestEmail: string;
+
+  @minLength(1)
+  @maxLength(200)
+  @pattern("^\\S(?:[\\s\\S]*\\S)?$")
+  topic?: string;
+
   ...Record<never>;
 }
 

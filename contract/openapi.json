@@ -462,6 +462,12 @@
             "type": "string",
             "maxLength": 254,
             "format": "email"
+          },
+          "topic": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200,
+            "pattern": "^\\S(?:[\\s\\S]*\\S)?$"
           }
         },
         "unevaluatedProperties": { "not": {} }
@@ -486,6 +492,12 @@
             "type": "string",
             "maxLength": 254,
             "format": "email"
+          },
+          "topic": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200,
+            "pattern": "^\\S(?:[\\s\\S]*\\S)?$"
           }
         },
         "unevaluatedProperties": { "not": {} }
@@ -589,7 +601,8 @@
           "eventTypeId": { "type": "string" },
           "startsAt": { "type": "string" },
           "guestName": { "type": "string" },
-          "guestEmail": { "type": "string" }
+          "guestEmail": { "type": "string" },
+          "topic": { "type": "string" }
         },
         "unevaluatedProperties": { "not": {} }
       },

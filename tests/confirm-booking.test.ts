@@ -85,6 +85,108 @@ test("confirmation saves normalized contacts and full interval and replays after
   });
 });
 
+test("booking topic is normalized, persisted, returned and replayed exactly", async () => {
+  await withBackend(async ({ url }) => {
+    const eventType = await type(url);
+    const key = randomUUID();
+    const payload = {
+      ...raw,
+      eventTypeId: eventType.id,
+      topic: "  План встречи:\n- обсудить сроки\n  ",
+    };
+    const response = await post(url, key, payload);
+    expect(response.status).toBe(201);
+    const saved = await response.json();
+    expect(saved.data).toMatchObject({
+      topic: "План встречи:\n- обсудить сроки",
+    });
+    expect(await (await post(url, key, payload)).json()).toEqual(saved);
+    const owner = await (
+      await fetch(`${url}/api/owner/bookings?period=all`)
+    ).json();
+    expect(owner.data).toEqual([saved.data]);
+  });
+});
+
+test("empty topic is absent while 200 characters after trim are accepted", async () => {
+  await withBackend(async ({ url }) => {
+    const eventType = await type(url, 540);
+    for (const [index, topic] of [
+      " \n\t ",
+      `  ${"я".repeat(200)}  `,
+    ].entries()) {
+      const response = await post(url, randomUUID(), {
+        ...raw,
+        eventTypeId: eventType.id,
+        startsAt: `2026-11-${String(9 + index).padStart(2, "0")}T06:00:00.000Z`,
+        topic,
+      });
+      expect(response.status).toBe(201);
+      const saved = (await response.json()).data;
+      if (index === 0) expect(saved).not.toHaveProperty("topic");
+      else expect(saved.topic).toBe("я".repeat(200));
+    }
+    const owner = await (
+      await fetch(`${url}/api/owner/bookings?period=all`)
+    ).json();
+    expect(owner.data[0]).not.toHaveProperty("topic");
+    expect(owner.data[1].topic).toBe("я".repeat(200));
+  });
+});
+
+test("topic over 200 characters is a saved validation refusal", async () => {
+  await withBackend(async ({ url }) => {
+    const eventType = await type(url);
+    const key = randomUUID();
+    const payload = {
+      ...raw,
+      eventTypeId: eventType.id,
+      topic: "я".repeat(201),
+    };
+    const response = await post(url, key, payload);
+    expect(response.status).toBe(422);
+    const saved = await response.json();
+    expect(saved).toMatchObject({
+      idempotencyKey: key,
+      outcome: "rejected",
+      error: {
+        code: "VALIDATION_ERROR",
+        fieldErrors: { topic: expect.any(String) },
+      },
+    });
+    expect(await (await post(url, key, payload)).json()).toEqual(saved);
+  });
+});
+
+test("topic does not change the ordinary slot conflict", async () => {
+  await withBackend(async ({ url }) => {
+    const eventType = await type(url);
+    const first = await post(url, randomUUID(), {
+      ...raw,
+      eventTypeId: eventType.id,
+      topic: "Первая тема",
+    });
+    expect(first.status).toBe(201);
+    const conflictKey = randomUUID();
+    const conflictPayload = {
+      ...raw,
+      eventTypeId: eventType.id,
+      topic: "Другая тема",
+    };
+    const conflict = await post(url, conflictKey, conflictPayload);
+    expect(conflict.status).toBe(409);
+    const refused = await conflict.json();
+    expect(refused).toMatchObject({
+      idempotencyKey: conflictKey,
+      outcome: "rejected",
+      error: { code: "SLOT_TAKEN" },
+    });
+    expect(
+      await (await post(url, conflictKey, conflictPayload)).json(),
+    ).toEqual(refused);
+  });
+});
+
 test("concurrent overlapping types have one winner, exact concurrent retries and touching boundaries", async () => {
   await withBackend(async ({ url, path }) => {
     const first = await type(url, 45),

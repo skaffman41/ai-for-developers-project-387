@@ -119,6 +119,17 @@
 .booking-confirmation {
   overflow-wrap: anywhere;
 }
+.booking-contacts textarea {
+  width: 100%;
+  box-sizing: border-box;
+  font: inherit;
+  padding: 8px;
+  resize: vertical;
+}
+.booking-topic {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
 .booking-contacts dialog {
   max-width: min(420px, calc(100vw - 48px));
   box-sizing: border-box;

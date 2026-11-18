@@ -11,7 +11,7 @@ import { DatabaseSync } from "node:sqlite";
 import { pathToFileURL } from "node:url";
 
 const applicationId = 0x43414c31;
-const version = 3;
+const version = 4;
 const schema = `CREATE TABLE event_types (
   sequence INTEGER PRIMARY KEY AUTOINCREMENT,
   id TEXT NOT NULL UNIQUE,
@@ -30,13 +30,22 @@ const resultsSchema = `CREATE TABLE operation_results (
   PRIMARY KEY (operation, attempt_key)
 ) STRICT`;
 
-const bookingsSchema = `CREATE TABLE bookings (
+const bookingsSchemaV3 = `CREATE TABLE bookings (
   id TEXT PRIMARY KEY NOT NULL,
   event_type_id TEXT NOT NULL REFERENCES event_types(id),
   starts_at INTEGER NOT NULL,
   ends_at INTEGER NOT NULL CHECK (ends_at > starts_at),
   guest_name TEXT NOT NULL CHECK (length(guest_name) BETWEEN 1 AND 100),
   guest_email TEXT NOT NULL CHECK (length(guest_email) BETWEEN 1 AND 254)
+) STRICT`;
+const bookingsSchema = `CREATE TABLE bookings (
+  id TEXT PRIMARY KEY NOT NULL,
+  event_type_id TEXT NOT NULL REFERENCES event_types(id),
+  starts_at INTEGER NOT NULL,
+  ends_at INTEGER NOT NULL CHECK (ends_at > starts_at),
+  guest_name TEXT NOT NULL CHECK (length(guest_name) BETWEEN 1 AND 100),
+  guest_email TEXT NOT NULL CHECK (length(guest_email) BETWEEN 1 AND 254),
+  topic TEXT CHECK (topic IS NULL OR length(topic) BETWEEN 1 AND 200)
 ) STRICT`;
 const occupancyIndex =
   "CREATE INDEX bookings_interval ON bookings (starts_at, ends_at)";
@@ -47,7 +56,9 @@ function checkSchema(database: DatabaseSync, expectedVersion: number) {
       ? [schema]
       : expectedVersion === 2
         ? [schema, resultsSchema]
-        : [bookingsSchema, occupancyIndex, schema, resultsSchema];
+        : expectedVersion === 3
+          ? [bookingsSchemaV3, occupancyIndex, schema, resultsSchema]
+          : [bookingsSchema, occupancyIndex, schema, resultsSchema];
   const tables = database
     .prepare(
       "SELECT sql FROM sqlite_schema WHERE sql IS NOT NULL AND name != 'sqlite_sequence' ORDER BY name",
@@ -138,7 +149,7 @@ export function openDatabase(
     database.open();
     if (
       pragma(database, "application_id") !== applicationId ||
-      ![1, 2, version].includes(Number(pragma(database, "user_version")))
+      ![1, 2, 3, version].includes(Number(pragma(database, "user_version")))
     ) {
       throw new Error(
         "Foreign or unsupported database schema; run explicit preparation for a new database",
@@ -157,10 +168,24 @@ export function openDatabase(
           database.exec("PRAGMA user_version=2");
           checkSchema(database, 2);
         }
-        database.exec(bookingsSchema);
-        database.exec(occupancyIndex);
-        database.exec(`PRAGMA user_version=${version}`);
-        checkSchema(database, version);
+        if (currentVersion <= 2) {
+          database.exec(bookingsSchemaV3);
+          database.exec(occupancyIndex);
+          database.exec("PRAGMA user_version=3");
+          checkSchema(database, 3);
+        }
+        if (currentVersion <= 3) {
+          database.exec("DROP INDEX bookings_interval");
+          database.exec("ALTER TABLE bookings RENAME TO bookings_legacy");
+          database.exec(bookingsSchema);
+          database.exec(
+            "INSERT INTO bookings(id,event_type_id,starts_at,ends_at,guest_name,guest_email,topic) SELECT id,event_type_id,starts_at,ends_at,guest_name,guest_email,NULL FROM bookings_legacy",
+          );
+          database.exec("DROP TABLE bookings_legacy");
+          database.exec(occupancyIndex);
+          database.exec(`PRAGMA user_version=${version}`);
+          checkSchema(database, version);
+        }
         options.beforeMigrationCommit?.();
         database.exec("COMMIT");
       } catch (error) {

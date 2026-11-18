@@ -11,10 +11,18 @@ type SeedType = {
   description?: string;
   createdAt?: number;
 };
+type SeedBooking = {
+  eventTypeId: string;
+  startsAt: string;
+  endsAt: string;
+  guestName?: string;
+  guestEmail?: string;
+  topic?: string;
+};
 type Fixtures = {
   eventTypes: { values: SeedType[] };
   serverTime: string | undefined;
-  bookings: { eventTypeId: string; startsAt: string; endsAt: string }[];
+  bookings: SeedBooking[];
   backend: { url: string; setTime: (value: string) => Promise<void> };
 };
 
@@ -41,19 +49,30 @@ export const test = base.extend<Fixtures>({
               type.description ?? null,
               type.createdAt ?? 0,
             );
-          for (const [index, booking] of bookings.entries())
+          for (const [index, booking] of bookings.entries()) {
+            const columns = [
+              "id",
+              "event_type_id",
+              "starts_at",
+              "ends_at",
+              "guest_name",
+              "guest_email",
+              ...(booking.topic === undefined ? [] : ["topic"]),
+            ];
             connection
               .prepare(
-                "INSERT INTO bookings (id,event_type_id,starts_at,ends_at,guest_name,guest_email) VALUES (?,?,?,?,?,?)",
+                `INSERT INTO bookings (${columns.join(",")}) VALUES (${columns.map(() => "?").join(",")})`,
               )
               .run(
                 `fixture-${index}`,
                 booking.eventTypeId,
                 Date.parse(booking.startsAt),
                 Date.parse(booking.endsAt),
-                "Гость",
-                "guest@example.com",
+                booking.guestName ?? "Гость",
+                booking.guestEmail ?? "guest@example.com",
+                ...(booking.topic === undefined ? [] : [booking.topic]),
               );
+          }
         } finally {
           connection.close();
         }

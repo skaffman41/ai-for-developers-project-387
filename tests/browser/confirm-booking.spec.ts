@@ -52,6 +52,67 @@ test("guest confirms real booking with keyboard and restores confirmation after 
   await expect(
     page.getByRole("heading", { name: "Встреча забронирована" }),
   ).toBeVisible();
+  await expect(page.locator(".booking-topic")).toHaveCount(0);
+});
+
+test("guest topic is trimmed, kept with the confirmation and shown to the owner", async ({
+  page,
+  context,
+}, info) => {
+  await contacts(page);
+  await page
+    .getByLabel("Тема разговора")
+    .fill("  План встречи:\n- обсудить сроки  ");
+  const response = page.waitForResponse(
+    (value) =>
+      value.url().endsWith("/api/bookings") &&
+      value.request().method() === "POST",
+  );
+  await page
+    .getByRole("button", { name: "Подтвердить бронирование", exact: true })
+    .click();
+  const created = await response;
+  expect(created.status()).toBe(201);
+  const { data: booking } = await created.json();
+  expect(booking.topic).toBe("План встречи:\n- обсудить сроки");
+  await expect(
+    page.getByText("План встречи:\n- обсудить сроки", { exact: true }),
+  ).toBeVisible();
+  await page.reload();
+  await expect(
+    page.getByText("План встречи:\n- обсудить сроки", { exact: true }),
+  ).toBeVisible();
+  const owner = await context.newPage();
+  await owner.goto("/owner");
+  const row = owner
+    .getByRole("list", { name: "Сохранённые бронирования" })
+    .getByRole("listitem")
+    .filter({ hasText: booking.guestEmail });
+  await expect(row).toContainText("План встречи:\n- обсудить сроки");
+  await observe(owner, info, "owner-topic");
+  await owner.close();
+});
+
+test("overlong topic keeps the form editable, focuses its error and sends no request", async ({
+  page,
+}) => {
+  await contacts(page);
+  const topic = page.getByLabel("Тема разговора");
+  await topic.fill("я".repeat(201));
+  let posts = 0;
+  page.on("request", (request) => {
+    if (request.url().endsWith("/api/bookings")) posts++;
+  });
+  await page
+    .getByRole("button", { name: "Подтвердить бронирование", exact: true })
+    .click();
+  await expect(topic).toBeFocused();
+  await expect(topic).toHaveValue("я".repeat(201));
+  await expect(topic).toHaveAttribute("aria-invalid", "true");
+  await expect(page.locator("#booking-topic-error")).toContainText("200");
+  expect(posts).toBe(0);
+  await topic.fill("Короткая тема");
+  await expect(page.locator("#booking-topic-error")).toHaveText("");
 });
 
 test("guest starts another booking in the same tab and owner retains both real bookings", async ({

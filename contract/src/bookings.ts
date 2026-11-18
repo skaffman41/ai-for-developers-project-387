@@ -6,6 +6,7 @@ import type {
 export function normalizeBooking(input: CreateBookingInput): BookingDraft {
   const email = input.guestEmail.trim();
   const at = email.lastIndexOf("@");
+  const topic = input.topic?.trim();
   return {
     eventTypeId: input.eventTypeId,
     startsAt: input.startsAt,
@@ -14,5 +15,6 @@ export function normalizeBooking(input: CreateBookingInput): BookingDraft {
       at < 0
         ? email
         : email.slice(0, at + 1) + email.slice(at + 1).toLowerCase(),
+    ...(topic ? { topic } : {}),
   };
 }

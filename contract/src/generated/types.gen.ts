@@ -25,6 +25,7 @@ export type Booking = {
   endsAt: string;
   guestName: string;
   guestEmail: string;
+  topic?: string;
 };
 
 export type BookingDraft = {
@@ -32,6 +33,7 @@ export type BookingDraft = {
   startsAt: string;
   guestName: string;
   guestEmail: string;
+  topic?: string;
 };
 
 export type BookingError404 = {
@@ -81,6 +83,7 @@ export type CreateBookingInput = {
   startsAt: string;
   guestName: string;
   guestEmail: string;
+  topic?: string;
 };
 
 export type CreateEventTypeInput = {
