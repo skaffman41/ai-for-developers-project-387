@@ -3,6 +3,36 @@ import { readFile } from "node:fs/promises";
 import { parse } from "yaml";
 import { test } from "vitest";
 
+test("Audit report consumers use runner context only where GitHub makes it available", async () => {
+  const workflow = parse(
+    await readFile(".github/workflows/dependency-audit.yml", "utf8"),
+  );
+  const job = workflow.jobs.audit;
+  // GitHub excludes runner from jobs.<job_id>.env, but allows it in steps.env:
+  // https://docs.github.com/en/actions/reference/workflows-and-actions/contexts#context-availability
+  assert.doesNotMatch(
+    JSON.stringify(job.env),
+    /\$\{\{[^}]*\brunner(?:\.|\s*\[)/,
+    "Job env is evaluated before runner context is available",
+  );
+  for (const command of [
+    "scripts/prepare-github-agent.mjs",
+    "scripts/run-dependency-audit.mjs analyze",
+    "scripts/run-dependency-audit.mjs publish",
+    "GITHUB_STEP_SUMMARY",
+  ]) {
+    const step = job.steps.find((candidate: { run?: string }) =>
+      candidate.run?.includes(command),
+    );
+    assert.ok(step, `Missing report consumer: ${command}`);
+    assert.equal(
+      step.env?.DEPENDENCY_AUDIT_DIRECTORY,
+      "${{ runner.temp }}/dependency-audit",
+      `${command} must receive the report directory outside checkout`,
+    );
+  }
+});
+
 test("Both main-only audit entries share one daily Moscow schedule, 20-minute budget and non-cancelling concurrency with issue-only publication", async () => {
   const text = await readFile(".github/workflows/dependency-audit.yml", "utf8");
   const workflow = parse(text);
