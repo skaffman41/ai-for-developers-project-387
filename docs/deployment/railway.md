@@ -1,14 +1,46 @@
 # Ручная выкладка на Railway через MCP
 
-Активный маршрут [плана v2 #55](../plans/step-7-render-free/v2/spec.md) — один
-Docker-сервис Railway в пределах бесплатных Free/Trial-кредитов, бюджет 0 ₽.
-Подготовка #57 не создаёт проект, сервис или домен и не запускает деплой.
-Фактическая публикация относится к #58 после отдельно разрешённого включения
-проверенной версии в `main` и явной команды выкладки. Файлы в Git ничего не применяют.
+Стенд использует один Docker-сервис Railway в пределах доступных бесплатных
+Free/Trial-кредитов, бюджет 0 ₽. История выбора платформы и первоначальной
+публикации проекта 386 сохранена в [плане v2 #55](../plans/step-7-render-free/v2/spec.md)
+и отчёте ниже. Обновление на проект 387 выполнено по отдельной просьбе владельца
+после merge проверенной версии в `main`; задача документирования —
+[#61](https://github.com/skaffman41/ai-for-developers-project-387/issues/61).
+Файлы в Git сами по себе не запускают выкладку.
 
 ## Опубликованный стенд
 
 Публичный адрес: [Календарь звонков](https://call-calendar-production-f16fe2bd.up.railway.app).
+
+### Обновление — 18 ноября 2026
+
+После отдельной команды владельца [PR #57](https://github.com/skaffman41/ai-for-developers-project-387/pull/57)
+включён в `main` проекта 387. Существующий сервис `call-calendar` переключён на
+`skaffman41/ai-for-developers-project-387` и закреплён на
+`0e374ac4572ce8b22b3fb5f97496b022a5b479a7`. Push следующих коммитов не обновляет
+стенд автоматически. Домены, регион EU West, одна replica, лимиты 500 MB / 1 vCPU,
+сон и отсутствие тома/внешней БД сохранены.
+
+Перед применением MCP подтвердил ровно два staged-поля этого сервиса: repository
+и commit SHA. Usage, прочитанный с отдельного согласия владельца, показал Trial,
+23 дня, баннер около $4.99, Credits Available $5.00, Current Usage $0.01 и Current
+Bill $0.00. Подписка, карта и платные ресурсы не добавлялись.
+
+Deployment `bf991dfc-0329-464e-ad91-b4a3a2d3d6e4` завершился `SUCCESS`
+18 ноября в 19:43:49 UTC. MCP повторно подтвердил точный source SHA и отсутствие
+staged changes. Локальная production Docker-сборка и её запуск с собственной
+пустой SQLite прошли проверку health, frontend, `/booking`, `/owner` и API.
+После выкладки публичные health, frontend и прямые маршруты вернули HTTP 200;
+хеши опубликованных JS/CSS совпали с production-сборкой, в JS присутствует форма
+«Тема разговора». Удалённый OCI-образ отдельно не сканировался.
+
+При замене контейнера учебная SQLite создана заново. Сброс данных и ручное
+обновление закреплённого SHA остаются ограничениями этого бесплатного стенда.
+Подробная диагностика операции хранится вне Git; критерии и итог — в
+[#61](https://github.com/skaffman41/ai-for-developers-project-387/issues/61).
+
+### Первоначальная публикация — 11 ноября 2026
+
 11 ноября 2026 года после разрешённых push, PR и merge [#59](https://github.com/skaffman41/ai-for-developers-project-386/pull/59)
 официальный MCP создал проект `call-calendar-demo`, среду `production` и один
 Docker-сервис `call-calendar`. Проверенный источник закреплён на
@@ -139,7 +171,7 @@ Credits Used и Current Bill **$0.00**. Trial Plan указывает 1 GB RAM, 
 Compute и Railway Agent учитываются раздельно; платный Agent в этом маршруте не вызывается.
 [Лимиты расходов](https://docs.railway.com/pricing/cost-control#compute-vs-agent-usage-limits).
 
-В Railway отдельно проверьте доступ к `skaffman41/ai-for-developers-project-386`
+В Railway отдельно проверьте доступ к `skaffman41/ai-for-developers-project-387`
 и ветке `main`, без подтверждения создания сервиса. Успех `gh`, OAuth MCP
 и список проектов не подтверждают Railway → GitHub. Для GitHub source используется
 Railway GitHub App. [Инструкция source](https://docs.railway.com/services#deploying-from-a-github-repo)
@@ -163,7 +195,8 @@ code, commit statuses, deployments, pull requests и workflows, а также ч
 
 Указанный SHA `403a3c2` относится к preflight #57 до интеграции Docker-версии.
 Перед фактической выкладкой #58 удалённый `main` был повторно прочитан: выбран
-`7a96e8b` после merge #59. Источник закреплён на нём, clone/build прошли через Railway.
+`7a96e8b` после merge #59. При первоначальной выкладке источник был закреплён
+на нём, clone/build прошли через Railway.
 
 ## Воспроизводимые настройки сервиса
 
@@ -171,7 +204,7 @@ code, commit statuses, deployments, pull requests и workflows, а также ч
 
 | Настройка        | Требуемое значение                                                                                    |
 | ---------------- | ----------------------------------------------------------------------------------------------------- |
-| Источник         | `skaffman41/ai-for-developers-project-386`, `main`, выбранный опубликованный SHA.                     |
+| Источник         | `skaffman41/ai-for-developers-project-387`, `main`, выбранный опубликованный SHA.                     |
 | Сборка           | Корневой `Dockerfile`, контекст корня; без отдельного build/start override.                           |
 | Запуск           | `CMD` образа: один Node/Fastify; frontend и API вместе, `HOST=0.0.0.0`.                               |
 | Порт             | Выданный Railway `PORT`, без фиксированного переопределения в настройках сервиса.                     |
@@ -210,7 +243,7 @@ commit и прекращает деплои по push в ветку. Отдел�
    Сохраните `projectId`/`environmentId`; это уже запись, не безопасный просмотр.
 3. Создайте **пустой** `create_service` с `staged: true`, явными project/environment,
    без image. Затем `connect_service_source` в той же среде: `staged: true`,
-   `repo: "skaffman41/ai-for-developers-project-386"`, `branch: "main"`,
+   `repo: "skaffman41/ai-for-developers-project-387"`, `branch: "main"`,
    `commitSha: "<проверенный опубликованный SHA main>"`. Без `staged: true`
    подключение source применилось бы сразу ко всем средам и могло запустить сборку.
 4. Через `update_service` с `staged: true` и теми же ID задайте
