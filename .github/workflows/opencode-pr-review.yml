@@ -374,14 +374,24 @@ jobs:
             const raw = execFileSync('unzip', ['-p', archive, 'review.json'], { encoding: 'utf8', maxBuffer: 60_000, timeout: 10_000 });
             const result = JSON.parse(raw);
             assert.equal(result.sha, sha, 'Review SHA mismatch');
-            const review = result.review;
+            assert.ok(Object.hasOwn(result, 'text') !== Object.hasOwn(result, 'review'), 'Expected exactly one review format');
             const text = value => typeof value === 'string' && value.trim().length > 0 && value.length <= 5000;
-            assert.ok(text(review?.summary), 'Missing review summary');
-            assert.ok(Array.isArray(review.findings) && review.findings.length <= 50, 'Invalid review findings');
-            for (const finding of review.findings) {
-              assert.ok(text(finding.file) && !finding.file.startsWith('/') && !finding.file.split('/').includes('..'), 'Finding needs a repository file');
-              assert.ok(Number.isSafeInteger(finding.line) && finding.line > 0, 'Finding needs a line');
-              assert.ok(text(finding.conditions) && text(finding.consequences), 'Finding needs conditions and consequences');
+            let reviewBody;
+            if (Object.hasOwn(result, 'text')) {
+              assert.ok(typeof result.text === 'string' && result.text.trim().length > 0 && result.text.length <= 50_000, 'Invalid review text');
+              reviewBody = result.text;
+            } else {
+              const review = result.review;
+              assert.ok(text(review?.summary), 'Missing review summary');
+              assert.ok(Array.isArray(review.findings) && review.findings.length <= 50, 'Invalid review findings');
+              for (const finding of review.findings) {
+                assert.ok(text(finding.file) && !finding.file.startsWith('/') && !finding.file.split('/').includes('..'), 'Finding needs a repository file');
+                assert.ok(Number.isSafeInteger(finding.line) && finding.line > 0, 'Finding needs a line');
+                assert.ok(text(finding.conditions) && text(finding.consequences), 'Finding needs conditions and consequences');
+              }
+              reviewBody = `${review.summary}\n\n${review.findings.map(finding =>
+                `- ${finding.file}:${finding.line}\n  Условия: ${finding.conditions}\n  Последствия: ${finding.consequences}`
+              ).join('\n\n')}`;
             }
             const { data: pr } = await github.rest.pulls.get({ ...context.repo, pull_number: number });
             if (pr.state !== 'open') { core.notice('PR closed; review publication skipped'); return; }
@@ -391,9 +401,7 @@ jobs:
                (pr.user?.login === 'opencode-agent[bot]' && pr.user.type === 'Bot')), 'PR trust changed');
             const body = pr.head.sha !== sha
               ? `Результат ревью устарел: head PR изменился.\n\nПроверенная версия: ${sha}\nТекущая версия: ${pr.head.sha}`
-              : `${review.summary}\n\n${review.findings.map(finding =>
-                  `- ${finding.file}:${finding.line}\n  Условия: ${finding.conditions}\n  Последствия: ${finding.consequences}`
-                ).join('\n\n')}\n\nПроверенная версия: ${sha}`;
+              : `${reviewBody}\n\nПроверенная версия: ${sha}`;
             assert.ok(body.length < 60_000, 'Review comment too large');
             // An issue comment records findings; this job never submits APPROVE.
             await github.rest.issues.createComment({ ...context.repo, issue_number: number, body });

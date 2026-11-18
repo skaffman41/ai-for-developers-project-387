@@ -27,6 +27,12 @@ or failure, `pr-review-diagnostics-<run_id>-<run_attempt>` retains only
 `review-diagnostics.json` for 14 days. Prompts, raw events, stderr and environment
 values are excluded. Cancellation may prevent this diagnostic upload.
 
+`--format json` serializes CLI events; the assistant answer may still be ordinary
+text. The result envelope contains exactly one of a validated structured `review`
+or bounded `text`. Text is published verbatim with the checked SHA, without
+inventing a structured findings count. CLI/provider failures and malformed JSON
+reviews remain failures. The producer bounds UTF-8 bytes before artifact upload.
+
 Its separate 15-minute browser job has no model secret: it checks out and verifies
 the exact PR head, then saves an HTML report, expected/actual SHA, traces and
 screenshots on success and failure. `pr-browser-<run_id>-<run_attempt>` artifacts

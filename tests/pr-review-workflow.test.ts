@@ -89,7 +89,11 @@ test("Owner and the named App bot receive review; forks and other identities do 
 
 async function publish(
   currentSha = sha,
-  report = {
+  report: {
+    sha: string;
+    text?: string;
+    review?: { summary: string; findings: unknown[] };
+  } = {
     sha,
     review: { summary: "No defects found.", findings: [] },
   },
@@ -187,6 +191,27 @@ test("Publisher comments on the reviewed head and explains a stale result withou
     /SHA/,
   );
   await assert.rejects(publish(sha, undefined, "unexpected.json"), /entry/);
+});
+
+test("Publisher preserves a plain-text CLI review and binds it to the checked head", async () => {
+  const text = "I have completed the review.\n\nNo confirmed defects found.";
+  const comments = await publish(sha, { sha, text });
+  assert.equal(comments.length, 1);
+  assert.ok(comments[0].body.startsWith(text));
+  assert.ok(comments[0].body.includes(sha));
+  const stale = await publish("2".repeat(40), { sha, text });
+  assert.equal(stale.length, 1);
+  assert.ok(!stale[0].body.includes(text));
+});
+
+test("Publisher rejects empty, oversized or ambiguous text results", async () => {
+  for (const report of [
+    { sha, text: " " },
+    { sha, text: "x".repeat(50001) },
+    { sha, text: "Review", review: { summary: "Other review", findings: [] } },
+  ]) {
+    await assert.rejects(publish(sha, report));
+  }
 });
 
 async function report(
