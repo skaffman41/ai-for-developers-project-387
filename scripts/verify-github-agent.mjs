@@ -24,7 +24,7 @@ assert.equal(
 assert.equal(agent.mode, "primary");
 assert.deepEqual(agent.model, {
   providerID: "opencode",
-  modelID: "glm-5.3-flash-free",
+  modelID: "deepseek-v4.1-flash-free",
 });
 /** @param {{name: string, tools: Record<string, boolean>}} candidate @param {string[]} permitted */
 function verifyTools(candidate, permitted) {

@@ -41,7 +41,7 @@ try {
       "--agent",
       "github-pr-review",
       "--model",
-      "opencode/glm-5.3-flash-free",
+      "opencode/deepseek-v4.1-flash-free",
       "--format",
       "json",
     ],

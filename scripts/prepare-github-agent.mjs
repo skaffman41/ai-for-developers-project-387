@@ -83,7 +83,7 @@ const agentName = prReview
   : publish
     ? "github-publisher"
     : "github-reader";
-const model = "opencode/glm-5.3-flash-free";
+const model = "opencode/deepseek-v4.1-flash-free";
 const response = await fetch("https://opencode.ai/inference/v1/models", {
   signal: AbortSignal.timeout(15_000),
 });
@@ -93,7 +93,9 @@ assert.ok(
 );
 /** @type {{data: {id: string, capabilities?: {tools?: {supported?: boolean}}, cost?: {text?: {input?: {price?: number, cache?: {read?: number}}, output?: {price?: number}}}}[]}} */
 const catalog = await response.json();
-const models = catalog.data.filter((item) => item.id === "glm-5.3-flash-free");
+const models = catalog.data.filter(
+  (item) => item.id === "deepseek-v4.1-flash-free",
+);
 assert.equal(
   models.length,
   1,
@@ -433,7 +435,7 @@ const config = {
   small_model: model,
   default_agent: agentName,
   enabled_providers: ["opencode"],
-  provider: { opencode: { whitelist: ["glm-5.3-flash-free"] } },
+  provider: { opencode: { whitelist: ["deepseek-v4.1-flash-free"] } },
   autoupdate: false,
   share: "disabled",
   snapshot: false,
