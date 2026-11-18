@@ -240,7 +240,8 @@ console.log(JSON.stringify(journal));
             AUDIT_FIXTURE_MODE: options.mode ?? "success",
           },
           encoding: "utf8",
-          timeout: 5000,
+          // Allow cold starts of the fixture CLIs without changing model deadlines.
+          timeout: 15_000,
         },
       );
     let result = run(options.split ? "analyze" : undefined);
