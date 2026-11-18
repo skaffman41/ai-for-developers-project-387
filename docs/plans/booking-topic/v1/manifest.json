@@ -33,20 +33,13 @@
       "url": "https://github.com/skaffman41/ai-for-developers-project-387/issues/20",
       "title": "Тема разговора при прерывании и повторе отправки",
       "parent": 17,
-      "blockedBy": [
-        19
-      ],
+      "blockedBy": [19],
       "snapshotSha256": "844ec7e26e783645717a746bef987ec52c321f893b7686330c27fd8f76096714",
       "publishedBodySha256": "844ec7e26e783645717a746bef987ec52c321f893b7686330c27fd8f76096714"
     }
   ],
-  "ticketOrder": [
-    19,
-    20
-  ],
-  "frontierAtPlanning": [
-    19
-  ],
+  "ticketOrder": [19, 20],
+  "frontierAtPlanning": [19],
   "parentBodyPreserved": true,
   "testingDecisions": {
     "newHttpOrUnitTests": true,
