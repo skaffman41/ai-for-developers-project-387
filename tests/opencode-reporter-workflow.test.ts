@@ -23,6 +23,7 @@ async function report(
     registry?: Record<string, unknown>;
     identityApiFailure?: "workflow" | "attempt";
     notices?: string[];
+    target?: "issue" | "pull_request";
   } = {},
 ) {
   const source = {
@@ -98,7 +99,15 @@ async function report(
           createComment: async (comment: {
             body: string;
             issue_number: number;
-          }) => comments.push(comment),
+          }) => {
+            // Model the token scope at the external API boundary, not just the script.
+            const permission =
+              options.target === "issue" ? "issues" : "pull-requests";
+            if (workflow.jobs.report.permissions[permission] !== "write") {
+              throw new Error(`HTTP 403: missing ${permission}: write`);
+            }
+            comments.push(comment);
+          },
         },
       },
     },
@@ -124,6 +133,20 @@ test("a separate reporter survives the model job timeout and identifies its admi
   assert.match(comments[0]!.body, new RegExp(head));
   assert.match(comments[0]!.body, /actions\/runs\/100\/attempts\/2/);
   assert.match(comments[0]!.body, /нужен человек/);
+});
+
+test("the reporter can still publish failure notifications on ordinary Issues", async () => {
+  const comments = await report("failure", [admitted], [], { target: "issue" });
+  assert.equal(comments.length, 1);
+  assert.match(comments[0]!.body, /\*\*infra\*\*/);
+});
+
+test("the reporter can publish a PR notification after an inline request", async () => {
+  const comments = await report("timed_out", [admitted], [], {
+    trigger: { event: "pull_request_review_comment" },
+  });
+  assert.equal(comments.length, 1);
+  assert.match(comments[0]!.body, /\*\*timeout\*\*/);
 });
 
 test("manual completion accepts legacy and expanded run names for the registered workflow", async () => {
@@ -263,7 +286,11 @@ test("the reporter has its own timeout and requires no checkout, runtime or mode
     workflow_run: { workflows: ["opencode"], types: ["completed"] },
   });
   assert.equal(workflow.jobs.report["timeout-minutes"], 5);
-  assert.equal(workflow.jobs.report.permissions.actions, "read");
+  assert.deepEqual(workflow.jobs.report.permissions, {
+    actions: "read",
+    issues: "write",
+    "pull-requests": "write",
+  });
   assert.doesNotMatch(
     source,
     /secrets\.|actions\/checkout|anomalyco\/opencode|OPENCODE_API_KEY/,
