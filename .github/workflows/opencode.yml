@@ -81,7 +81,7 @@ jobs:
       cancel-in-progress: false
       queue: max # keep queued requests; only admitted attempts spend budget
     runs-on: ubuntu-24.04
-    timeout-minutes: 30
+    timeout-minutes: 60
     permissions:
       actions: read # immutable admission evidence; neither this token nor the App may write Actions
       contents: read

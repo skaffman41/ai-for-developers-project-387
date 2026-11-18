@@ -1,0 +1,16 @@
+{
+  "repository": "skaffman41/ai-for-developers-project-387",
+  "version": 1,
+  "approved": true,
+  "approval": "Владелец: сохранить implement-spec #17 и граф #19 → #20, разделить итерации и увеличить ручной лимит до 60 минут.",
+  "approval_url": "https://github.com/skaffman41/ai-for-developers-project-387/issues/12#issuecomment-6978797018",
+  "source_commit": "b1151634d2ee7834616676ddf025ac700ffae6d3",
+  "issue": 25,
+  "issue_url": "https://github.com/skaffman41/ai-for-developers-project-387/issues/25",
+  "source_body_sha256": "3ce573e4eedd43b4c7de3a5a45a7a1e8bbda13a03c77b856306540c785a83a3c",
+  "files": {
+    "source-25.md": "cb86be8d081ea14f5dfa8f481636d55a9bdef5ada90988418c6d3b20c2ec1886",
+    "clarification.md": "c51dcd9122f3ebc6ad4f524f8cccd7ae7823ad7ed620817be6de568dd5c649c3"
+  },
+  "blocked_by": []
+}
