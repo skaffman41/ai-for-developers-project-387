@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { readFile } from "node:fs/promises";
+import { readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 
 assert.ok(process.env.GITHUB_AGENT_ROOT, "GITHUB_AGENT_ROOT is required");
@@ -11,15 +11,19 @@ const discovered = JSON.parse(
 );
 const lock = JSON.parse(await readFile(join(root, "skills-lock.json"), "utf8"));
 const mode = process.env.GITHUB_AGENT_MODE;
-assert.ok(mode && ["read-only", "publish", "pr-review"].includes(mode));
+assert.ok(
+  mode && ["read-only", "publish", "pr-review", "audit"].includes(mode),
+);
 const publish = mode === "publish";
 assert.equal(
   agent.name,
-  mode === "pr-review"
-    ? "github-pr-review"
-    : publish
-      ? "github-publisher"
-      : "github-reader",
+  mode === "audit"
+    ? "dependency-auditor"
+    : mode === "pr-review"
+      ? "github-pr-review"
+      : publish
+        ? "github-publisher"
+        : "github-reader",
 );
 assert.equal(agent.mode, "primary");
 assert.deepEqual(agent.model, {
@@ -66,3 +70,12 @@ for (const skill of lock.skills) {
 console.log(
   `Runtime verified: ${process.env.GITHUB_AGENT_MODE} tools; all 38 pinned skills discovered and read`,
 );
+if (mode === "audit")
+  await writeFile(
+    join(root, "audit-ready.json"),
+    JSON.stringify({
+      mode,
+      runtime: "1.19.6",
+      model: "opencode/deepseek-v4.1-flash-free",
+    }),
+  );

@@ -1,0 +1,126 @@
+name: dependency-audit
+
+on:
+  schedule:
+    - cron: "17 6 * * *"
+      timezone: Europe/Moscow
+  workflow_dispatch:
+    inputs:
+      input:
+        description: Report source
+        type: choice
+        options: [real, educational, replay]
+        default: real
+      source_run:
+        description: Original acquisition run ID (replay only)
+        type: string
+      source_attempt:
+        description: Original acquisition run attempt (replay only)
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: dependency-audit-${{ github.repository }}
+  cancel-in-progress: false
+
+jobs:
+  audit:
+    if: github.repository == 'skaffman41/ai-for-developers-project-387' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      issues: write
+      actions: read
+    env:
+      GITHUB_AGENT_MODE: audit
+      DEPENDENCY_AUDIT_INPUT: ${{ inputs.input || 'real' }}
+      DEPENDENCY_AUDIT_SOURCE_RUN: ${{ inputs.source_run }}
+      DEPENDENCY_AUDIT_SOURCE_ATTEMPT: ${{ inputs.source_attempt }}
+    steps:
+      - name: Checkout main without Git credentials
+        id: checkout
+        timeout-minutes: 1
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+
+      - uses: jdx/mise-action@b44d12e7d0d8ee7461bb893e1b1993500433185b # v5.2.7
+        id: tools
+        timeout-minutes: 2
+        with:
+          version: "2026.11.3"
+          install_args: "--locked"
+
+      - name: Stage verified Matt Pocock Skills and the free read-only audit agent
+        timeout-minutes: 2
+        env:
+          DEPENDENCY_AUDIT_DIRECTORY: ${{ runner.temp }}/dependency-audit
+        run: |
+          mkdir -p "$DEPENDENCY_AUDIT_DIRECTORY"
+          mise exec -- node scripts/prepare-github-agent.mjs 2>&1 | tee "$DEPENDENCY_AUDIT_DIRECTORY/preparation.log"
+
+      - name: Install and verify the pinned CLI without model or GitHub secrets
+        timeout-minutes: 2
+        env:
+          VERSION: "1.19.6"
+        run: |
+          mkdir -p "$RUNNER_TEMP/opencode-cli"
+          curl --fail --silent --show-error --location --connect-timeout 10 --max-time 120 \
+            https://github.com/anomalyco/opencode/releases/download/v1.19.6/opencode-linux-x64.tar.gz \
+            -o "$RUNNER_TEMP/opencode-cli/runtime.tar.gz"
+          tar -xzf "$RUNNER_TEMP/opencode-cli/runtime.tar.gz" -C "$RUNNER_TEMP/opencode-cli"
+          test "$("$RUNNER_TEMP/opencode-cli/opencode" --version)" = "$VERSION"
+          echo "$RUNNER_TEMP/opencode-cli" >> "$GITHUB_PATH"
+          "$RUNNER_TEMP/opencode-cli/opencode" debug agent dependency-auditor > "$GITHUB_AGENT_ROOT/agent.json"
+          "$RUNNER_TEMP/opencode-cli/opencode" debug skill > "$GITHUB_AGENT_ROOT/discovery.json"
+          mise exec -- node "$GITHUB_AGENT_ROOT/verify.mjs"
+
+      - name: Collect the full report and analyze without publishing
+        if: ${{ !cancelled() && steps.checkout.outcome == 'success' && steps.tools.outcome == 'success' }}
+        timeout-minutes: 9
+        env:
+          DEPENDENCY_AUDIT_DIRECTORY: ${{ runner.temp }}/dependency-audit
+          GH_TOKEN: ${{ github.token }}
+          OPENCODE_API_KEY: ${{ secrets.OPENCODE_API_KEY }}
+        run: mise exec -- node scripts/run-dependency-audit.mjs analyze
+
+      - name: Publish at most one finding and the journal without a model secret
+        if: ${{ !cancelled() && steps.checkout.outcome == 'success' && steps.tools.outcome == 'success' }}
+        timeout-minutes: 1
+        env:
+          DEPENDENCY_AUDIT_DIRECTORY: ${{ runner.temp }}/dependency-audit
+          GH_TOKEN: ${{ github.token }}
+        run: mise exec -- node scripts/run-dependency-audit.mjs publish
+
+      - name: Preserve an explanation even when preparation or analysis fails
+        if: always()
+        timeout-minutes: 1
+        env:
+          DEPENDENCY_AUDIT_DIRECTORY: ${{ runner.temp }}/dependency-audit
+          AUDIT_JOB_STATUS: ${{ job.status }}
+        run: |
+          mkdir -p "$DEPENDENCY_AUDIT_DIRECTORY"
+          if [ ! -f "$DEPENDENCY_AUDIT_DIRECTORY/result.json" ]; then
+            printf '%s\n' '{"status":"preparation-error","error":"Audit did not complete; see failed preparation step. This is not a clean report."}' > "$DEPENDENCY_AUDIT_DIRECTORY/result.json"
+          fi
+          printf 'Dependency audit job: %s. Reports and diagnostics: artifact dependency-audit-%s-%s (30 days).\n' "$AUDIT_JOB_STATUS" "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT" >> "$GITHUB_STEP_SUMMARY"
+          cat "$DEPENDENCY_AUDIT_DIRECTORY/result.json" >> "$GITHUB_STEP_SUMMARY"
+          if [ -f "$DEPENDENCY_AUDIT_DIRECTORY/journal.md" ]; then
+            cat "$DEPENDENCY_AUDIT_DIRECTORY/journal.md" >> "$GITHUB_STEP_SUMMARY"
+          else
+            cat "$DEPENDENCY_AUDIT_DIRECTORY/result.json" >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Save complete source data, analysis and diagnostics
+        if: always()
+        timeout-minutes: 1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: dependency-audit-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/dependency-audit/
+          retention-days: 30
+          if-no-files-found: error
