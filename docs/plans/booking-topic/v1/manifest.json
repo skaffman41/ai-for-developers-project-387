@@ -1,0 +1,58 @@
+{
+  "schemaVersion": 1,
+  "repository": "skaffman41/ai-for-developers-project-387",
+  "feature": "booking-topic",
+  "version": "v1",
+  "approved": true,
+  "approval": "2026-11-17: владелец согласовал спецификацию #17 и граф #19 → #20 (issuecomment-6955502689). 2026-11-18: владелец дополнительно разрешил новые либо расширенные HTTP/Vitest и Playwright проверки на существующих границах и разовое упрощение запуска implement-spec (issuecomment-6958554923).",
+  "baseCommit": "b1151634d2ee7834616676ddf025ac700ffae6d3",
+  "records": [
+    {
+      "file": "spec.md",
+      "number": 17,
+      "url": "https://github.com/skaffman41/ai-for-developers-project-387/issues/17",
+      "title": "Спецификация: тема разговора у бронирования",
+      "parent": null,
+      "blockedBy": [],
+      "snapshotSha256": "728f3f880f7b794cc32ead99b077a6743eed40bf63616b66bdb3a8ce6b1f6ffb",
+      "publishedBodySha256": "728f3f880f7b794cc32ead99b077a6743eed40bf63616b66bdb3a8ce6b1f6ffb"
+    },
+    {
+      "file": "19.md",
+      "number": 19,
+      "url": "https://github.com/skaffman41/ai-for-developers-project-387/issues/19",
+      "title": "Бронирование с темой разговора — полный флоу",
+      "parent": 17,
+      "blockedBy": [],
+      "snapshotSha256": "0339ab53432fb7d40d27ed7078eca6b5020902cb427660840607a93afcd87032",
+      "publishedBodySha256": "0339ab53432fb7d40d27ed7078eca6b5020902cb427660840607a93afcd87032"
+    },
+    {
+      "file": "20.md",
+      "number": 20,
+      "url": "https://github.com/skaffman41/ai-for-developers-project-387/issues/20",
+      "title": "Тема разговора при прерывании и повторе отправки",
+      "parent": 17,
+      "blockedBy": [
+        19
+      ],
+      "snapshotSha256": "844ec7e26e783645717a746bef987ec52c321f893b7686330c27fd8f76096714",
+      "publishedBodySha256": "844ec7e26e783645717a746bef987ec52c321f893b7686330c27fd8f76096714"
+    }
+  ],
+  "ticketOrder": [
+    19,
+    20
+  ],
+  "frontierAtPlanning": [
+    19
+  ],
+  "parentBodyPreserved": true,
+  "testingDecisions": {
+    "newHttpOrUnitTests": true,
+    "newBrowserScenarios": true,
+    "boundary": "Существующие HTTP-smoke на временной SQLite и Playwright Chromium с настоящими frontend/backend; проверяются тема, нормализация, валидация, миграция, список владельца, восстановление вкладки и идемпотентные повторы.",
+    "requiredExistingChecks": "Сначала воспроизводимый отказ новой проверки, затем успешный прогон; существующий сценарий без темы проходит до и после изменения; полный mise run check; независимые Standards/Spec review."
+  },
+  "completionBoundary": "План готов к разовому последовательному запуску #19 → #20 одним агентом-разработчиком в исходной ветке. Issues остаются открытыми до подтверждённого merge; push, PR и merge выполняет штатный адаптер или человек по отдельной команде."
+}
