@@ -1,0 +1,124 @@
+name: opencode manual reporter
+
+on:
+  workflow_run:
+    workflows: [opencode]
+    types: [completed]
+
+permissions:
+  contents: read
+
+jobs:
+  report:
+    # workflow_run runs independently after cancellation/timeout of the model workflow.
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    concurrency:
+      group: opencode-report-${{ github.event.workflow_run.id }}-${{ github.event.workflow_run.run_attempt }}
+      cancel-in-progress: false
+    permissions:
+      actions: read
+      issues: write
+    steps:
+      - name: Explain an incomplete manual attempt without model or checkout
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        with:
+          script: |
+            const repository = 'skaffman41/ai-for-developers-project-387';
+            const event = context.payload.workflow_run;
+            const workflowPath = '.github/workflows/opencode.yml';
+            const number = /^opencode manual #([1-9][0-9]*)$/.exec(event?.display_title ?? '');
+            if (context.payload.repository?.full_name !== repository || event?.path !== workflowPath ||
+                event.repository?.full_name !== repository || event.head_repository?.full_name !== repository ||
+                !['issue_comment', 'pull_request_review_comment'].includes(event.event) || !number ||
+                !Number.isSafeInteger(Number(number[1])) || !Number.isSafeInteger(event.id) || event.id < 1 ||
+                !Number.isSafeInteger(event.run_attempt) || event.run_attempt < 1) {
+              core.notice('Reporter skipped an unrelated workflow run');
+              return;
+            }
+            if (event.conclusion === 'success') return;
+            let head = /^[0-9a-f]{40}$/.test(event.head_sha) ? event.head_sha : 'unknown';
+            const run = `https://github.com/${repository}/actions/runs/${event.id}/attempts/${event.run_attempt}`;
+            let workflow;
+            let source;
+            try {
+              ({ data: workflow } = await github.rest.actions.getWorkflow({ ...context.repo, workflow_id: 'opencode.yml' }));
+              if (!Number.isSafeInteger(workflow?.id) || workflow.id <= 0 ||
+                  workflow.id !== event.workflow_id || workflow.path !== workflowPath || workflow.name !== 'opencode') return;
+              ({ data: source } = await github.rest.actions.getWorkflowRunAttempt({
+                ...context.repo, run_id: event.id, attempt_number: event.run_attempt,
+              }));
+            } catch {
+              core.notice(`OpenCode: infra; нужен человек.\n\nПоследний известный SHA: ${head}\nЗапуск: ${run}\nНе удалось подтвердить источник через GitHub API; комментарий не опубликован.`);
+              return;
+            }
+            if (source?.id !== event.id || source.run_attempt !== event.run_attempt ||
+                source.workflow_id !== workflow.id || source.path !== workflowPath || source.display_title !== event.display_title ||
+                source.event !== event.event || source.status !== 'completed' ||
+                source.repository?.full_name !== repository || source.head_repository?.full_name !== repository ||
+                !['success', 'failure', 'cancelled', 'timed_out', 'startup_failure', 'action_required', 'neutral', 'skipped', 'stale'].includes(source.conclusion)) return;
+            let reason;
+            try {
+              let jobs = [];
+              let total;
+              for (let page = 1; ; page++) {
+                const { data } = await github.rest.actions.listJobsForWorkflowRunAttempt({
+                  ...context.repo, run_id: event.id, attempt_number: event.run_attempt, per_page: 100, page,
+                });
+                if (!Number.isSafeInteger(data.total_count) || data.total_count < 0 ||
+                    (total !== undefined && total !== data.total_count) || !Array.isArray(data.jobs)) {
+                  throw new Error('Ambiguous source jobs');
+                }
+                total = data.total_count;
+                jobs.push(...data.jobs);
+                if (jobs.length >= total) break;
+                if (data.jobs.length !== 100) throw new Error('Truncated source jobs');
+              }
+              const answers = jobs.filter(job => job.name === 'answer');
+              if (jobs.length !== total || answers.length !== 1) throw new Error('Missing source job');
+              const job = answers[0];
+              const steps = job.steps ?? [];
+              const marker = steps.map(step => /^Record admitted manual attempt ([0-9a-f]{40})$/.exec(step.name)).find(Boolean);
+              if (marker) head = marker[1];
+              const limit = steps.find(step => step.name === 'Reject exhausted manual budget');
+              const admission = steps.find(step => step.name === 'Check the manual PR budget inside the model queue');
+              const authorization = steps.find(step => step.name === 'Authorize the comment before checkout or model secrets');
+              const model = steps.find(step => step.name === 'Run the official OpenCode GitHub adapter');
+              if (limit?.conclusion === 'failure') reason = 'limit_exhausted';
+              else if (source.conclusion === 'timed_out' || job.conclusion === 'timed_out' ||
+                       steps.some(step => step.conclusion === 'timed_out')) reason = 'timeout';
+              else if (model?.conclusion === 'failure') reason = 'agent_failed';
+              else if (source.conclusion === 'success' && ['success', 'skipped'].includes(job.conclusion)) return;
+              else if (job.conclusion === 'skipped' && jobs.some(candidate => candidate.name === 'authorize' &&
+                       candidate.steps?.some(step => step.name === 'Owner command eligible for manual queue' && step.conclusion === 'skipped') &&
+                       candidate.steps?.some(step => step.name === 'Authorize the comment before checkout or model secrets' && step.conclusion === 'success'))) return;
+              else if (authorization?.conclusion === 'success' && admission?.conclusion === 'skipped' &&
+                       !steps.some(step => step.conclusion === 'failure')) return;
+              else reason = 'infra';
+            } catch {
+              // No model runs here; a missing API result is an infrastructure failure.
+              reason = 'infra';
+            }
+            const marker = `<!-- opencode-manual-report:${event.id}:${event.run_attempt} -->`;
+            const issue_number = Number(number[1]);
+            // Comments deduplicate reports only. The budget reads Actions history exclusively.
+            for (let page = 1; ; page++) {
+              const { data: comments } = await github.rest.issues.listComments({
+                ...context.repo, issue_number, per_page: 100, page,
+              });
+              if (!Array.isArray(comments)) throw new Error('Ambiguous reporter comments');
+              if (comments.some(comment => comment.user?.login === 'github-actions[bot]' &&
+                  comment.user?.type === 'Bot' && comment.body?.includes(marker))) return;
+              if (comments.length < 100) break;
+            }
+            const explanations = {
+              limit_exhausted: 'Исчерпан бюджет: на PR уже допущены 3 ручные попытки, включая Re-run, отмены и тайм-ауты.',
+              timeout: 'Задание агента остановлено по тайм-ауту.',
+              agent_failed: 'Агент завершился с ошибкой; проверьте ошибку адаптера, конфигурацию и бесплатную модель/квоту.',
+              infra: 'Запуск отменён или не завершён из-за инфраструктурной ошибки; проверьте задания и доступность GitHub API.',
+            };
+            await github.rest.issues.createComment({
+              ...context.repo,
+              issue_number,
+              body: `${marker}\nOpenCode: **${reason}** — нужен человек.\n\n${explanations[reason]}\n\nПоследний известный SHA: \`${head}\`.\n[Actions run, attempt ${event.run_attempt}](${run}).\n\nАвтоматический переход на другую модель не выполняется.`,
+            });

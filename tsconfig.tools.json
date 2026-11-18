@@ -15,6 +15,7 @@
     "tests/**/*.ts",
     "vitest.config.ts",
     "playwright.config.ts",
+    "playwright.pr.config.ts",
     "eslint.config.mjs"
   ]
 }
