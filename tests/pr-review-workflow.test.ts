@@ -18,6 +18,17 @@ async function workflow() {
   );
 }
 
+function allowsReviewJob(
+  condition: string,
+  outputs: Record<string, string>,
+  attempt = 1,
+) {
+  return new Function("needs", "github", `return (${condition});`)(
+    { authorize: { outputs } },
+    { run_attempt: attempt },
+  );
+}
+
 function pull(login = "skaffman41", type = "User", fork = false) {
   return {
     number: 71,
@@ -28,7 +39,12 @@ function pull(login = "skaffman41", type = "User", fork = false) {
   };
 }
 
-async function authorize(pr = pull(), runs: unknown[] = [], attempt = "1") {
+async function authorize(
+  pr = pull(),
+  runs: unknown[] = [],
+  attempt = "1",
+  action = "synchronize",
+) {
   const outputs: Record<string, string> = {};
   const notices: string[] = [];
   const script = (await workflow()).jobs.authorize.steps[0].with.script;
@@ -53,7 +69,7 @@ async function authorize(pr = pull(), runs: unknown[] = [], attempt = "1") {
       runId: 100,
       repo: { owner: "skaffman41", repo: "ai-for-developers-project-387" },
       payload: {
-        action: "synchronize",
+        action,
         repository: { full_name: repository },
         pull_request: pr,
       },
@@ -438,14 +454,126 @@ test("Actions history suppresses a repeated PR/head and a rerun before the model
     ).outputs.review_allowed,
     "true",
   );
-  const allowed = new Function(
-    "needs",
-    "github",
-    `return (${config.jobs.review.if});`,
+  const cached = { review_allowed: "true" };
+  assert.equal(allowsReviewJob(config.jobs.review.if, cached), true);
+  assert.equal(allowsReviewJob(config.jobs.review.if, cached, 2), false);
+});
+
+test("A reopened same-head PR is rejected before it can cancel the active review", async () => {
+  const config = await workflow();
+  const repeated = await authorize(
+    pull(),
+    [
+      {
+        id: 99,
+        event: "pull_request",
+        status: "in_progress",
+        display_title: `opencode-review pr=71 sha=${sha}`,
+      },
+    ],
+    "1",
+    "reopened",
   );
-  const cached = { authorize: { outputs: { review_allowed: "true" } } };
-  assert.equal(allowed(cached, { run_attempt: 1 }), true);
-  assert.equal(allowed(cached, { run_attempt: 2 }), false);
+  assert.equal(repeated.outputs.allowed, "true");
+  assert.equal(repeated.outputs.review_allowed, undefined);
+  assert.equal(allowsReviewJob(config.jobs.review.if, repeated.outputs), false);
+  assert.equal(
+    config.concurrency,
+    undefined,
+    "Workflow cancellation must not preempt admission of a same-head event",
+  );
+  assert.equal(config.jobs.review.needs, "authorize");
+  assert.equal(config.jobs.review.concurrency["cancel-in-progress"], true);
+});
+
+test("A new head enters the PR review cancellation group after admission", async () => {
+  const nextSha = "5".repeat(40);
+  const nextPull = { ...pull(), head: { ...pull().head, sha: nextSha } };
+  const admitted = await authorize(nextPull, [
+    {
+      id: 99,
+      event: "pull_request",
+      status: "in_progress",
+      display_title: `opencode-review pr=71 sha=${sha}`,
+    },
+  ]);
+  assert.equal(admitted.outputs.review_allowed, "true");
+  assert.equal(admitted.outputs.head_sha, nextSha);
+  const config = await workflow();
+  assert.equal(allowsReviewJob(config.jobs.review.if, admitted.outputs), true);
+  const cancellation = config.jobs.review.concurrency;
+  assert.equal(cancellation["cancel-in-progress"], true);
+  assert.match(cancellation.group, /github\.event\.pull_request\.number/);
+  assert.doesNotMatch(cancellation.group, /head\.sha/);
+  assert.equal(
+    (await report({ conclusion: "cancelled", currentSha: nextSha })).comments
+      .length,
+    0,
+  );
+  assert.match(
+    (await report({ conclusion: "cancelled" })).comments[0].body,
+    /agent_failed/,
+    "An actual cancellation of the current head still needs a human report",
+  );
+});
+
+test("A head change during history pagination prevents stale admission after the newer review", async () => {
+  const original = pull();
+  const nextSha = "5".repeat(40);
+  const next = { ...pull(), head: { ...pull().head, sha: nextSha } };
+  let current = original;
+  const outputs: Record<string, string> = {};
+  let releaseHistory!: (runs: unknown[]) => void;
+  let reachedHistory!: () => void;
+  const history = new Promise<unknown[]>((resolve) => {
+    releaseHistory = resolve;
+  });
+  const waiting = new Promise<void>((resolve) => {
+    reachedHistory = resolve;
+  });
+  const config = await workflow();
+  const oldAdmission = new AsyncFunction(
+    "github",
+    "context",
+    "core",
+    "process",
+    config.jobs.authorize.steps[0].with.script,
+  )(
+    {
+      rest: {
+        pulls: { get: async () => ({ data: current }) },
+        actions: { listWorkflowRuns: "workflow-runs" },
+      },
+      paginate: async () => {
+        reachedHistory();
+        return history;
+      },
+    },
+    {
+      eventName: "pull_request",
+      runId: 100,
+      repo: { owner: "skaffman41", repo: "ai-for-developers-project-387" },
+      payload: {
+        action: "synchronize",
+        repository: { full_name: repository },
+        pull_request: original,
+      },
+    },
+    {
+      setOutput: (name: string, value: string) => (outputs[name] = value),
+      notice: () => {},
+    },
+    { env: { GITHUB_RUN_ATTEMPT: "1" } },
+  );
+  await waiting;
+  current = next;
+  const newer = await authorize(next);
+  releaseHistory([]);
+  await oldAdmission;
+  assert.equal(newer.outputs.review_allowed, "true");
+  assert.equal(newer.outputs.head_sha, nextSha);
+  assert.equal(outputs.review_allowed, undefined);
+  assert.equal(allowsReviewJob(config.jobs.review.if, outputs), false);
 });
 
 test("Review verification permits only read/glob/skill and preparation rejects a fork before network", async () => {

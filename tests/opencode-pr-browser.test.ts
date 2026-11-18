@@ -13,8 +13,7 @@ test("PR browser checks the exact head on an isolated runner without model crede
   assert.deepEqual(workflow.on, {
     pull_request: { types: ["opened", "synchronize", "reopened"] },
   });
-  assert.equal(workflow.concurrency["cancel-in-progress"], true);
-  assert.match(workflow.concurrency.group, /pull_request.number/);
+  assert.equal(workflow.concurrency, undefined);
   const browser = workflow.jobs.browser;
   assert.equal(browser.needs, "authorize");
   assert.equal(browser.if, "needs.authorize.outputs.allowed == 'true'");

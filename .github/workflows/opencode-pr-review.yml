@@ -8,10 +8,6 @@ on:
 permissions:
   contents: read
 
-concurrency:
-  group: pr-review-${{ github.event.pull_request.number }}
-  cancel-in-progress: true
-
 jobs:
   authorize:
     runs-on: ubuntu-24.04
@@ -54,14 +50,20 @@ jobs:
               reject('PR trust or head changed since this event');
               return;
             }
-            core.setOutput('allowed', 'true');
-            core.setOutput('head_sha', pr.head.sha);
-            core.setOutput('base_sha', pr.base.sha);
-            core.setOutput('number', String(number));
             const marker = `opencode-review pr=${number} sha=${pr.head.sha}`;
             const runs = await github.paginate(github.rest.actions.listWorkflowRuns, {
               ...context.repo, workflow_id: 'opencode-pr-review.yml', per_page: 100,
             });
+            // History pagination may outlive a newer push; do not admit a stale head.
+            const { data: latest } = await github.rest.pulls.get({ ...context.repo, pull_number: number });
+            if (!trusted(latest) || latest.head.sha !== event.pull_request.head.sha) {
+              reject('PR trust or head changed during admission');
+              return;
+            }
+            core.setOutput('allowed', 'true');
+            core.setOutput('head_sha', latest.head.sha);
+            core.setOutput('base_sha', latest.base.sha);
+            core.setOutput('number', String(number));
             if (Number(process.env.GITHUB_RUN_ATTEMPT) > 1 ||
                 runs.some(run => run.event === 'pull_request' && run.id < context.runId && run.display_title === marker)) {
               reject(`this PR/head SHA already has a review run: ${pr.head.sha}`);

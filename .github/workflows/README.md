@@ -14,9 +14,14 @@ Forks and other authors are rejected before checkout or model secrets;
 `pull_request_target` is not used. A separate ordinary CLI session reads the exact
 head as data with only read/glob/skill. Trusted code and REVIEW.md come from main.
 A no-model publisher validates the result and comments with its SHA; it never
-approves the PR. Per-PR concurrency cancels obsolete reviews, and Actions history
-prevents another model review of the same head, including Re-run. Automatic review
-does not spend the manual budget or start a correction loop.
+approves the PR. Only the admitted review job enters its per-PR cancellation group:
+a new head cancels an obsolete review, while a rejected repeat of the same head
+cannot cancel the active review. There is no workflow-level cancellation before
+admission. Authorization rechecks live trust and head after history pagination,
+immediately before setting its outputs. Actions history prevents another model review of the same head,
+including Re-run. The independent browser job may finish for an older head; its
+SHA-labelled artifact is not evidence for the new head. Automatic review does not
+spend the manual budget or start a correction loop.
 
 The review step supervises the trusted main helper and reports progress every
 30 seconds: elapsed time, event/stderr byte counts, the last event type, and a
