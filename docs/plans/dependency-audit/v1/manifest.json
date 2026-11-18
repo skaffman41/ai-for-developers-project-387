@@ -1,0 +1,71 @@
+{
+  "schemaVersion": 1,
+  "repository": "skaffman41/ai-for-developers-project-387",
+  "feature": "dependency-audit",
+  "version": "v1",
+  "approved": true,
+  "approval": "2026-11-18: владелец согласовал решения grill-with-docs Q1–Q7, включая новые автоматические проверки аудита, с условием выполнения всех обязательных задач и требований шага 5 Hexlet. По команде $to-spec опубликована #53. По команде $to-tickets 53 предложен граф из трёх вертикальных задач; ответом «Согласовываем» владелец подтвердил гранулярность и цепочку #54 → #55 → #56.",
+  "baseCommit": "14393bb14808a899e6f9c3969442db21173ff394",
+  "records": [
+    {
+      "file": "spec.md",
+      "number": 53,
+      "url": "https://github.com/skaffman41/ai-for-developers-project-387/issues/53",
+      "title": "Регулярный аудит зависимостей GitHub-агентом — шаг 5 Hexlet",
+      "parent": null,
+      "blockedBy": [],
+      "snapshotSha256": "98bb8a007d1c69485b12c622e519e976abce2042490eca9e4cbc25de0b99e850",
+      "publishedBodySha256": "80a6e2a805145dba6169b0caff9368e10654992ace9214a7d25bead2c33851a4"
+    },
+    {
+      "file": "54.md",
+      "number": 54,
+      "url": "https://github.com/skaffman41/ai-for-developers-project-387/issues/54",
+      "title": "Получать отчёт зависимостей и вести постоянный журнал аудита",
+      "parent": 53,
+      "blockedBy": [],
+      "snapshotSha256": "5a143053bf87bddc26040fe202a8ee6316beca786f3b3a7d083d334ae67e6fb4",
+      "publishedBodySha256": "5a143053bf87bddc26040fe202a8ee6316beca786f3b3a7d083d334ae67e6fb4"
+    },
+    {
+      "file": "55.md",
+      "number": 55,
+      "url": "https://github.com/skaffman41/ai-for-developers-project-387/issues/55",
+      "title": "Создавать задачи по новым находкам и повторять аудит без дублей",
+      "parent": 53,
+      "blockedBy": [54],
+      "snapshotSha256": "9077778678e10e708d907bee6d45e1935bf9a90b473697161af3f1732ba84504",
+      "publishedBodySha256": "9077778678e10e708d907bee6d45e1935bf9a90b473697161af3f1732ba84504"
+    },
+    {
+      "file": "56.md",
+      "number": 56,
+      "url": "https://github.com/skaffman41/ai-for-developers-project-387/issues/56",
+      "title": "Подтвердить весь сценарий в GitHub Actions и оформить результат шага",
+      "parent": 53,
+      "blockedBy": [55],
+      "snapshotSha256": "0c5568a26eb4c905d3f5cc43e51eb877ee3e908e8787cc27b7544a57dbf4b6e7",
+      "publishedBodySha256": "0c5568a26eb4c905d3f5cc43e51eb877ee3e908e8787cc27b7544a57dbf4b6e7"
+    }
+  ],
+  "ticketOrder": [54, 55, 56],
+  "frontierAtPlanning": [54],
+  "parentBodyPreserved": true,
+  "snapshotFormatting": "Markdown нормализован закреплённым Prettier без изменения содержания. snapshotSha256 относится к локальному файлу; publishedBodySha256 — к точным байтам тела Issue. Для спецификации сохранены оба хеша, родительское тело не редактировалось.",
+  "testingDecisions": {
+    "newAuditTests": true,
+    "newCalendarTests": false,
+    "boundary": "Поведение audit-runner на заданном отчёте, inventory Issues и управляемых границах npm/model/GitHub: результат, журнал и операции создания задач; повтор тех же данных и ошибки. Отдельная обязательная граница — реальные ручные прогоны того же workflow из main.",
+    "requiredExistingChecks": "Профильные проверки и полный mise run check для существенной реализации; независимые Standards/Spec. Для planning snapshot — сверка текстов/хешей/графа, форматирование, ссылки и git diff --check; штатные pre-commit lint и format:check.",
+    "liveAcceptanceTicket": 56
+  },
+  "coverage": {
+    "54": ["AC1–AC4: реализация", "AC8–AC10: реализация"],
+    "55": ["AC5–AC7: реализация", "AC4/AC8–AC10: дополнение"],
+    "56": [
+      "AC11–AC12: живая приёмка и документация",
+      "AC1–AC10: итоговое подтверждение"
+    ]
+  },
+  "completionBoundary": "#54 и #55 передают проверенные локальные коммиты и отчёты и остаются открытыми до интеграции. #56 выполняет живую приёмку только после отдельно разрешённой публикации/merge реализации в main; личные выводы согласуются с владельцем после прогонов. Push, создание PR, merge, публикация реализации и завершение шага на Hexlet этой подготовкой не разрешены."
+}
