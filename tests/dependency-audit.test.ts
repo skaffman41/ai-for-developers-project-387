@@ -106,7 +106,7 @@ async function audit(
     );
     const cli = `#!${process.execPath}
 import assert from 'node:assert/strict';
-import { readFileSync, writeFileSync, appendFileSync, existsSync } from 'node:fs';
+import { readFileSync, readdirSync, writeFileSync, appendFileSync, existsSync } from 'node:fs';
 import { basename, join } from 'node:path';
 const root = process.env.AUDIT_FIXTURE_ROOT;
 const name = basename(process.argv[1]);
@@ -129,8 +129,20 @@ if (name === 'opencode') {
   assert.match(input, /issues.json/);
   if (mode === 'model_failure') process.exit(7);
   if (mode === 'model_timeout') { await new Promise(() => setInterval(() => {}, 1000)); }
-  const findings = JSON.parse(readFileSync(join(process.env.DEPENDENCY_AUDIT_DIRECTORY, 'findings.json'), 'utf8'));
-  const answer = mode === 'invalid_model' ? '{broken' : JSON.stringify({ summary: 'Проверено закреплённое дерево. Автоматическое исправление не выполнялось.' + (mode === 'changed_wording' ? readFileSync(join(root, 'model-calls'), 'utf8') : ''), applicability: 'Advisory требует проверки достижимости; дефект календаря не подтверждён.', assessments: findings.filter(f => ['high', 'critical'].includes(f.severity)).map(f => ({ key: f.key, applicability: 'Нужна проверка достижимости.', action: 'Оценить безопасное обновление.', knownIssueNumbers: mode === 'unrelated_model_issue' ? [999] : [] })) });
+  const suppliedDirectory = input.match(/Каталог данных: (.+)/)[1];
+  const findings = JSON.parse(readFileSync(join(suppliedDirectory, 'findings.json'), 'utf8'));
+  let summary = 'Проверено закреплённое дерево. Автоматическое исправление не выполнялось.' + (mode === 'changed_wording' ? readFileSync(join(root, 'model-calls'), 'utf8') : '');
+  let applicability = 'Advisory требует проверки достижимости; дефект календаря не подтверждён.';
+  if (mode === 'browse_inputs') {
+    const files = Object.fromEntries(readdirSync(suppliedDirectory).filter(name => name.endsWith('.json')).map(name => [name, JSON.parse(readFileSync(join(suppliedDirectory, name), 'utf8'))]));
+    writeFileSync(join(root, 'browsed-inputs.json'), JSON.stringify(files));
+    // Like a browsing model, the stand-in treats a supplied result as the latest source state.
+    const sourceState = files['result.json']?.provenance ?? files['provenance.json'];
+    summary = sourceState.reportValidated ? 'Источник проверен: ' + sourceState.reportSha256 : 'Источник не проверен: analysis-incomplete';
+    applicability = files['issues.json'].some(issue => issue.body?.includes('STALE JOURNAL SOURCE FAILURE')) ? 'STALE JOURNAL SOURCE FAILURE' : applicability;
+    assert.equal(readFileSync(join(suppliedDirectory, 'audit-report.json'), 'utf8'), readFileSync(join(root, 'report.json'), 'utf8'));
+  }
+  const answer = mode === 'invalid_model' ? '{broken' : JSON.stringify({ summary, applicability, assessments: findings.filter(f => ['high', 'critical'].includes(f.severity)).map(f => ({ key: f.key, applicability: 'Нужна проверка достижимости.', action: 'Оценить безопасное обновление.', knownIssueNumbers: mode === 'unrelated_model_issue' ? [999] : [] })) });
   console.log(JSON.stringify({ type: 'text', part: { id: 'final', messageID: 'answer', text: answer } }));
   process.exit(0);
 }
@@ -310,6 +322,14 @@ console.log(JSON.stringify(journal));
       firstStatus,
       npmCalls,
       modelCalls,
+      browsedInputs: JSON.parse(
+        await readFile(join(directory, "browsed-inputs.json"), "utf8").catch(
+          () => "null",
+        ),
+      ),
+      inventory: JSON.parse(
+        await readFile(join(output, "issues.json"), "utf8").catch(() => "null"),
+      ),
     };
   } finally {
     await rm(directory, { recursive: true, force: true });
@@ -329,6 +349,61 @@ test("A clean pinned dependency tree produces one substantive permanent journal 
   assert.match(body, /actions\/runs\/123/);
   assert.match(body, /reportSha256/);
   assert.equal(result.saved.provenance.dataType, "real");
+});
+
+test("A browsing model receives only validated source facts and finding Issues, keeping journal prose consistent with final provenance", async () => {
+  const issues = [
+    {
+      number: 4,
+      state: "open",
+      title: "dev-tool-high",
+      body: "Advisory npm:101",
+    },
+    {
+      number: 5,
+      state: "closed",
+      title: "dev-tool-critical",
+      body: "Advisory npm:102",
+    },
+    {
+      number: 90,
+      state: "open",
+      title: "Журнал аудита зависимостей",
+      user: { login: "github-actions[bot]", type: "Bot" },
+      body: "<!-- dependency-audit:journal:v1 -->\nSTALE JOURNAL SOURCE FAILURE",
+    },
+  ];
+  const result = await audit({
+    report: advisoryReport,
+    mode: "browse_inputs",
+    issues,
+  });
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(result.saved.provenance.reportValidated, true);
+  assert.equal(
+    result.saved.analysis.summary,
+    `Источник проверен: ${result.saved.provenance.reportSha256}`,
+  );
+  assert.doesNotMatch(
+    result.operations[0].body.body,
+    /analysis-incomplete|STALE JOURNAL SOURCE FAILURE/,
+  );
+  assert.match(result.operations[0].body.body, /Источник проверен:/);
+  assert.deepEqual(Object.keys(result.browsedInputs).sort(), [
+    "audit-report.json",
+    "findings.json",
+    "issues.json",
+    "provenance.json",
+  ]);
+  assert.deepEqual(
+    result.browsedInputs["issues.json"].map(
+      (issue: { number: number }) => issue.number,
+    ),
+    [4, 5],
+  );
+  assert.deepEqual(result.inventory, issues);
+  assert.equal(result.operations.length, 1);
+  assert.ok(result.operations[0].args.includes("PATCH"));
 });
 
 test("Expected audit exit 1 preserves all severities and creates only the most serious unknown finding", async () => {

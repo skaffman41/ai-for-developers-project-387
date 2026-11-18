@@ -338,10 +338,19 @@ const permission = {
   ]),
   external_directory: { "*": "deny", [`${skills}/*`]: "allow" },
 };
-if (audit)
-  permission.external_directory[
-    `${resolve(process.env.DEPENDENCY_AUDIT_DIRECTORY ?? "")}/*`
-  ] = "allow";
+if (audit) {
+  const data = resolve(process.env.DEPENDENCY_AUDIT_DIRECTORY ?? "");
+  const input = join(data, "model-input");
+  // V1 checks read and external_directory independently. Keep the enclosing
+  // status/artifact directory inaccessible even when a model guesses its path.
+  Object.assign(permission.read, {
+    [data]: "deny",
+    [`${data}/*`]: "deny",
+    [input]: "allow",
+    [`${input}/*`]: "allow",
+  });
+  permission.external_directory[`${input}/*`] = "allow";
+}
 // The adapter owns push/PR. Shell access is limited to local preparation,
 // verification, tracker issues through the pinned gh and commits. Reviewers
 // receive the diff as task input, without shell.
