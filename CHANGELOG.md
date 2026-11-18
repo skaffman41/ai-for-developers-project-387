@@ -1,5 +1,26 @@
 # Changelog
 
+## [0.6.0](https://github.com/skaffman41/ai-for-developers-project-387/compare/v0.5.0...v0.6.0) (2026-11-18)
+
+
+### Features
+
+* **audit:** collect dependency reports and maintain journal ([#54](https://github.com/skaffman41/ai-for-developers-project-387/issues/54)) ([b3515e3](https://github.com/skaffman41/ai-for-developers-project-387/commit/b3515e3e117fecacce21ae9b038fc93ab389fba0))
+* **audit:** publish findings and replay verified reports ([#55](https://github.com/skaffman41/ai-for-developers-project-387/issues/55)) ([a344f20](https://github.com/skaffman41/ai-for-developers-project-387/commit/a344f20802949e353a80a6ba33323724bae76044))
+* **audit:** регулярный аудит зависимостей ([#53](https://github.com/skaffman41/ai-for-developers-project-387/issues/53)) ([0e374ac](https://github.com/skaffman41/ai-for-developers-project-387/commit/0e374ac4572ce8b22b3fb5f97496b022a5b479a7))
+* **booking:** восстановить тему разговора при повторе отправки ([#20](https://github.com/skaffman41/ai-for-developers-project-387/issues/20)) ([23838a6](https://github.com/skaffman41/ai-for-developers-project-387/commit/23838a694751e7e5276e3091dacbf66ff49216c4))
+* **booking:** добавить необязательную тему разговора ([#19](https://github.com/skaffman41/ai-for-developers-project-387/issues/19)) ([b0187ff](https://github.com/skaffman41/ai-for-developers-project-387/commit/b0187ff587321b147cccc79ccc01f8a51598aad1))
+* **booking:** добавить тему разговора к бронированию ([#17](https://github.com/skaffman41/ai-for-developers-project-387/issues/17)) ([14393bb](https://github.com/skaffman41/ai-for-developers-project-387/commit/14393bb14808a899e6f9c3969442db21173ff394))
+
+
+### Bug Fixes
+
+* **agent:** allow sixty-minute manual iterations ([#25](https://github.com/skaffman41/ai-for-developers-project-387/issues/25)) ([b0dcf3d](https://github.com/skaffman41/ai-for-developers-project-387/commit/b0dcf3d6d658f35f0d75d8252659ae0c6238b5a1))
+* **agent:** увеличить ручной лимит до 60 минут ([#25](https://github.com/skaffman41/ai-for-developers-project-387/issues/25)) ([f983f84](https://github.com/skaffman41/ai-for-developers-project-387/commit/f983f841c89851ebc03c5ef0b3f3baf71d1f5986))
+* **audit:** isolate validated model inputs ([#54](https://github.com/skaffman41/ai-for-developers-project-387/issues/54)) ([c7e56ee](https://github.com/skaffman41/ai-for-developers-project-387/commit/c7e56eec002b6dd54909e1885db3d991966c33be))
+* **audit:** scope runner context to steps ([#54](https://github.com/skaffman41/ai-for-developers-project-387/issues/54)) ([1793a00](https://github.com/skaffman41/ai-for-developers-project-387/commit/1793a004e338100353b948872ebe2de59835af13))
+* isolate validated audit inputs from runner status ([#54](https://github.com/skaffman41/ai-for-developers-project-387/issues/54)) ([c57216e](https://github.com/skaffman41/ai-for-developers-project-387/commit/c57216ed3864b5e448a0d94c954716646d32b1c1))
+
 ## [0.5.0](https://github.com/skaffman41/ai-for-developers-project-387/compare/v0.4.0...v0.5.0) (2026-11-18)
 
 
