@@ -18,7 +18,7 @@ Matt Pocock Skills, включая `to-spec`, `to-tickets` и `implement-spec`.
 Обычный агент имеет только read/glob/skill; доступность `implement-spec` не даёт
 ему инструментов для выполнения всего графа. Следующий этап описан в отдельном
 [плане GitHub runtime](docs/agents/github-implement-spec-plan.md).
-Модель — `opencode/glm-5.3-flash-free`, автоматической замены модели нет.
+Модель — `opencode/deepseek-v4.1-flash-free`, автоматической замены модели нет.
 `share: false` отключает публикацию сессий; в закреплённой версии OpenCode
 публикация сессий уже удалена. Лимит задания — 30 минут; один Issue/PR обслуживается
 одним активным запуском, новый комментарий его не отменяет.

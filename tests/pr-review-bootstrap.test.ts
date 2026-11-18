@@ -1,12 +1,150 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import {
+  mkdir,
+  mkdtemp,
+  readFile,
+  rm,
+  symlink,
+  writeFile,
+} from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { test } from "vitest";
+import { parse } from "yaml";
 
-const model = { providerID: "opencode", modelID: "glm-5.3-flash-free" };
+const model = { providerID: "opencode", modelID: "deepseek-v4.1-flash-free" };
 const readTools = { read: true, glob: true, skill: true };
+
+test.each([
+  ["opencode.yml", "answer"],
+  ["opencode-triage.yml", "triage"],
+])(
+  "%s passes the approved DeepSeek model to the pinned adapter",
+  async (file, job) => {
+    const workflow = parse(await readFile(`.github/workflows/${file}`, "utf8"));
+    const adapter = workflow.jobs[job].steps.find((step: { uses?: string }) =>
+      step.uses?.startsWith("anomalyco/opencode/github@"),
+    );
+    assert.equal(adapter.with.model, "opencode/deepseek-v4.1-flash-free");
+  },
+);
+
+test("bootstrap accepts only the approved free DeepSeek catalog entry before runtime setup", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "free-model-bootstrap-"));
+  try {
+    const checkout = join(directory, "checkout");
+    const review = join(directory, "review-data");
+    await mkdir(checkout);
+    await mkdir(review);
+    await writeFile(
+      join(checkout, "skills-lock.json"),
+      await readFile("skills-lock.json"),
+    );
+    // A deliberate unsafe review fixture stops preparation after the catalog
+    // gate, before Git configuration, skill downloads or any model credentials.
+    await symlink(checkout, join(review, "catalog-passed"));
+    const eventPath = join(directory, "event.json");
+    const envPath = join(directory, "github-env");
+    const guardPath = join(directory, "catalog-api.mjs");
+    const repository = {
+      full_name: "skaffman41/ai-for-developers-project-387",
+    };
+    await writeFile(
+      eventPath,
+      JSON.stringify({
+        action: "opened",
+        repository,
+        pull_request: {
+          state: "open",
+          user: { login: "skaffman41", type: "User" },
+          head: { repo: { ...repository, fork: false } },
+          base: { repo: repository },
+        },
+      }),
+    );
+    await writeFile(envPath, "");
+    await writeFile(
+      guardPath,
+      `globalThis.fetch = async () => {
+        const fixture = JSON.parse(process.env.MODEL_CATALOG_FIXTURE);
+        if (fixture.offline) throw new Error('Model catalog offline');
+        return { ok: fixture.status === 200, status: fixture.status,
+          json: async () => ({ data: fixture.data }) };
+      };`,
+    );
+    const approved = {
+      id: model.modelID,
+      capabilities: { tools: { supported: true } },
+      cost: {
+        text: { input: { price: 0, cache: { read: 0 } }, output: { price: 0 } },
+      },
+    };
+    const prepare = (data: unknown[], status = 200, offline = false) =>
+      spawnSync(
+        process.execPath,
+        ["--import", guardPath, resolve("scripts/prepare-github-agent.mjs")],
+        {
+          cwd: checkout,
+          env: {
+            ...process.env,
+            OPENCODE_API_KEY: "",
+            GH_TOKEN: "",
+            GITHUB_TOKEN: "",
+            RUNNER_TEMP: directory,
+            GITHUB_ENV: envPath,
+            GITHUB_EVENT_PATH: eventPath,
+            GITHUB_EVENT_NAME: "pull_request",
+            GITHUB_AGENT_MODE: "pr-review",
+            GITHUB_REVIEW_DIRECTORY: review,
+            MODEL_CATALOG_FIXTURE: JSON.stringify({ data, status, offline }),
+          },
+          encoding: "utf8",
+          timeout: 5000,
+        },
+      );
+    const accepted = prepare([approved]);
+    assert.match(
+      accepted.stdout,
+      /Configured model supports tools and has zero/,
+    );
+    assert.match(accepted.stderr, /Symlink in the bootstrap checkout/);
+    assert.equal(accepted.status, 1); // Deliberate filesystem boundary, not inference.
+
+    const retired = { ...approved, id: "glm-5.3-flash-free" };
+    const paid = (field: "input" | "cache" | "output") => ({
+      ...approved,
+      cost: {
+        text: {
+          input: {
+            price: field === "input" ? 1 : 0,
+            cache: { read: field === "cache" ? 1 : 0 },
+          },
+          output: { price: field === "output" ? 1 : 0 },
+        },
+      },
+    });
+    for (const result of [
+      prepare([]),
+      prepare([retired]),
+      prepare([approved, approved]),
+      prepare([{ ...approved, capabilities: { tools: { supported: false } } }]),
+      prepare([paid("input")]),
+      prepare([paid("cache")]),
+      prepare([paid("output"), retired]),
+      prepare([{ ...approved, cost: {} }]),
+      prepare([approved], 503),
+      prepare([], 200, true),
+    ]) {
+      assert.equal(result.status, 1, result.stderr);
+      assert.doesNotMatch(result.stdout, /Configured model supports tools/);
+      assert.doesNotMatch(result.stderr, /Symlink in the bootstrap checkout/);
+    }
+    assert.equal(await readFile(envPath, "utf8"), "");
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
 
 test("PR review verification accepts reading and rejects execution, edits and delegation", async () => {
   const directory = await mkdtemp(join(tmpdir(), "pr-review-bootstrap-"));
